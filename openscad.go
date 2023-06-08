@@ -4,9 +4,44 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/lestrrat-go/blackmagic"
 )
+
+var globalRegistry = &Registry{
+	storage: make(map[string]Stmt),
+}
+
+func Register(name string, s Stmt) error {
+	return globalRegistry.Register(name, s)
+}
+
+func Lookup(name string) (Stmt, bool) {
+	return globalRegistry.Lookup(name)
+}
+
+type Registry struct {
+	mu      sync.RWMutex
+	storage map[string]Stmt
+}
+
+func (r *Registry) Register(name string, s Stmt) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.storage[name] = s
+	return nil
+}
+
+func (r *Registry) Lookup(name string) (Stmt, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.storage == nil {
+		return nil, false
+	}
+	s, ok := r.storage[name]
+	return s, ok
+}
 
 // Expr represents an expression in the OpenSCAD language.
 //
@@ -96,7 +131,7 @@ func (p *Variable) Value(v interface{}) *Variable {
 
 func (p *Variable) EmitExpr(ctx context.Context, w io.Writer) error {
 	if getBool(ctx, identAssignment{}) && p.value != nil {
-		fmt.Fprintf(w, `%s%s=`, GetIndent(ctx), p.name)
+		fmt.Fprintf(w, `%s=`, p.name)
 		// Remove the assignment flag
 		if err := emitValue(context.WithValue(ctx, identAssignment{}, false), w, p.value); err != nil {
 			return err
@@ -108,6 +143,7 @@ func (p *Variable) EmitExpr(ctx context.Context, w io.Writer) error {
 }
 
 func (p *Variable) EmitStmt(ctx context.Context, w io.Writer) error {
+	fmt.Fprint(w, GetIndent(ctx))
 	if err := p.EmitExpr(context.WithValue(ctx, identAssignment{}, true), w); err != nil {
 		return err
 	}
@@ -249,7 +285,7 @@ func (c *Call) EmitExpr(ctx context.Context, w io.Writer) error {
 type Function struct {
 	name       string
 	parameters []*Variable
-	body       Expr
+	body       interface{}
 }
 
 func NewFunction(name string) *Function {
@@ -263,7 +299,7 @@ func (f *Function) Parameters(params ...*Variable) *Function {
 	return f
 }
 
-func (f *Function) Body(body Expr) *Function {
+func (f *Function) Body(body interface{}) *Function {
 	f.body = body
 	return f
 }
@@ -294,5 +330,35 @@ func (f *Function) EmitExpr(ctx context.Context, w io.Writer) error {
 	if f.body == nil {
 		return fmt.Errorf(`expected a body`)
 	}
-	return f.body.EmitExpr(AddIndent(ctx), w)
+	return emitExpr(ctx, w, f.body)
+}
+
+type Include struct {
+	name string
+}
+
+func NewInclude(name string) *Include {
+	return &Include{
+		name: name,
+	}
+}
+
+func (i *Include) EmitStmt(_ context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `include <%s>`, i.name)
+	return nil
+}
+
+type Use struct {
+	name string
+}
+
+func NewUse(name string) *Use {
+	return &Use{
+		name: name,
+	}
+}
+
+func (i *Use) EmitStmt(_ context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `use <%s>`, i.name)
+	return nil
 }

@@ -34,7 +34,7 @@ func (l *Let) EmitStmt(ctx context.Context, w io.Writer) error {
 		if i > 0 {
 			fmt.Fprintf(w, `, `)
 		}
-		if err := emitValue(ctx, w, v); err != nil {
+		if err := emitExpr(ctx, w, v); err != nil {
 			return err
 		}
 	}

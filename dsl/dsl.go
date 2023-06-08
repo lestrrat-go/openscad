@@ -30,6 +30,10 @@ func Function(name string) *openscad.Function {
 	return openscad.NewFunction(name)
 }
 
+func Include(name string) *openscad.Include {
+	return openscad.NewInclude(name)
+}
+
 func Let(vars ...*openscad.Variable) *openscad.Let {
 	return openscad.NewLet(vars...)
 }
@@ -52,6 +56,10 @@ func Mul(left, right interface{}) *openscad.BinaryOp {
 
 func Stmts(stmts ...openscad.Stmt) openscad.Stmts {
 	return openscad.Stmts(stmts)
+}
+
+func Use(name string) *openscad.Use {
+	return openscad.NewUse(name)
 }
 
 func Variable(name string) *openscad.Variable {
