@@ -74,26 +74,6 @@ func (stmts Stmts) EmitStmt(ctx context.Context, w io.Writer) error {
 	return nil
 }
 
-type Shape interface {
-	Emit(context.Context, io.Writer) error
-}
-
-type emitter interface {
-	Emit(context.Context, io.Writer) error
-}
-
-func emitValue(ctx context.Context, w io.Writer, v interface{}) error {
-	switch v := v.(type) {
-	case Expr:
-		return v.EmitExpr(ctx, w)
-	case Stmt:
-		return v.EmitStmt(ctx, w)
-	default:
-		_, err := fmt.Fprintf(w, "%#v", v)
-		return err
-	}
-}
-
 type Variable struct {
 	name  string
 	value interface{}
@@ -115,8 +95,8 @@ func (p *Variable) Value(v interface{}) *Variable {
 }
 
 func (p *Variable) EmitExpr(ctx context.Context, w io.Writer) error {
-	if getBool(ctx, identAssignment{}) {
-		fmt.Fprintf(w, `%s=`, p.name)
+	if getBool(ctx, identAssignment{}) && p.value != nil {
+		fmt.Fprintf(w, `%s%s=`, GetIndent(ctx), p.name)
 		// Remove the assignment flag
 		if err := emitValue(context.WithValue(ctx, identAssignment{}, false), w, p.value); err != nil {
 			return err
@@ -128,7 +108,7 @@ func (p *Variable) EmitExpr(ctx context.Context, w io.Writer) error {
 }
 
 func (p *Variable) EmitStmt(ctx context.Context, w io.Writer) error {
-	if err := p.EmitExpr(ctx, w); err != nil {
+	if err := p.EmitExpr(context.WithValue(ctx, identAssignment{}, true), w); err != nil {
 		return err
 	}
 	fmt.Fprint(w, `;`)
@@ -192,7 +172,7 @@ func (m *Module) Actions(children ...Stmt) *Module {
 }
 
 func (m *Module) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `module %s(`, m.name)
+	fmt.Fprintf(w, "\nmodule %s(", m.name)
 
 	{
 		pctx := context.WithValue(ctx, identAssignment{}, true)
@@ -218,6 +198,7 @@ func (m *Module) EmitStmt(ctx context.Context, w io.Writer) error {
 type Call struct {
 	name       string
 	parameters []*Variable
+	children   []Stmt
 }
 
 func NewCall(name string) *Call {
@@ -231,18 +212,36 @@ func (c *Call) Parameters(params ...*Variable) *Call {
 	return c
 }
 
+func (c *Call) Add(children ...Stmt) *Call {
+	c.children = append(c.children, children...)
+	return c
+}
+
 func (c *Call) EmitStmt(ctx context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `%s`, GetIndent(ctx))
+	if err := c.EmitExpr(ctx, w); err != nil {
+		return err
+	}
+
+	if children := c.children; len(children) > 0 {
+		return emitChildren(ctx, w, children)
+	}
+	fmt.Fprint(w, `;`)
+	return nil
+}
+
+func (c *Call) EmitExpr(ctx context.Context, w io.Writer) error {
 	fmt.Fprintf(w, `%s(`, c.name)
 
-	{
-		pctx := context.WithValue(ctx, identAssignment{}, true)
-		for i, param := range c.parameters {
-			if i > 0 {
-				fmt.Fprintf(w, ", ")
-			}
-			emitValue(pctx, w, param)
+	ctx = context.WithValue(ctx, identAssignment{}, false)
+	for i, p := range c.parameters {
+		if i > 0 {
+			fmt.Fprintf(w, `, `)
+		}
+		if err := emitExpr(ctx, w, p); err != nil {
+			return err
 		}
 	}
-	fmt.Fprintf(w, ");")
+	fmt.Fprintf(w, ")")
 	return nil
 }

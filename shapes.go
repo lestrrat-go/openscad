@@ -43,21 +43,29 @@ func (p *Point2D) EmitExpr(ctx context.Context, w io.Writer) error {
 }
 
 type Polygon struct {
-	points Expr
+	points interface{}
+	paths  interface{}
 }
 
-func NewPolygon(points Expr) *Polygon {
+func NewPolygon(points, paths interface{}) *Polygon {
 	return &Polygon{
 		points: points,
+		paths:  paths,
 	}
 }
 
 func (p *Polygon) EmitStmt(ctx context.Context, w io.Writer) error {
 	indent := GetIndent(ctx)
-	fmt.Fprintf(w, `%spolygon(`, indent)
+	fmt.Fprintf(w, `%spolygon(points=`, indent)
 	ctx = context.WithValue(ctx, identAssignment{}, false)
-	if err := p.points.EmitExpr(ctx, w); err != nil {
+	if err := emitValue(ctx, w, p.points); err != nil {
 		return err
+	}
+	if p.paths != nil {
+		fmt.Fprintf(w, `, paths=`)
+		if err := emitValue(ctx, w, p.paths); err != nil {
+			return err
+		}
 	}
 	fmt.Fprint(w, `);`)
 	return nil
@@ -192,5 +200,119 @@ func (c *Cylinder) EmitStmt(ctx context.Context, w io.Writer) error {
 	emitFs(ctx, w, c.fs)
 	emitFn(ctx, w, c.fn)
 	fmt.Fprintf(w, `);`) // cylinders are always terminated with a semicolon
+	return nil
+}
+
+// Creates a call to the children() module.
+type Children struct {
+	idx *int
+}
+
+func NewChildren() *Children {
+	return &Children{}
+}
+
+func (c *Children) Index(idx int) *Children {
+	c.idx = &idx
+	return c
+}
+
+func (c *Children) EmitStmt(ctx context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `%schildren(`, GetIndent(ctx))
+	if c.idx != nil {
+		fmt.Fprintf(w, `%d`, *c.idx)
+	}
+	fmt.Fprintf(w, `);`)
+	return nil
+}
+
+type Sphere struct {
+	radius interface{}
+	fa     *int
+	fs     *int
+	fn     *int
+}
+
+func NewSphere(radius interface{}) *Sphere {
+	return &Sphere{
+		radius: radius,
+	}
+}
+
+func (s *Sphere) Fa(v int) *Sphere {
+	s.fa = &v
+	return s
+}
+
+func (s *Sphere) Fs(v int) *Sphere {
+	s.fs = &v
+	return s
+}
+
+func (s *Sphere) Fn(v int) *Sphere {
+	s.fn = &v
+	return s
+}
+
+func (s *Sphere) EmitStmt(ctx context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `%ssphere(r=`, GetIndent(ctx))
+	if s.radius == nil {
+		return fmt.Errorf("radius must be specified")
+	}
+	emitValue(ctx, w, s.radius)
+	emitFa(ctx, w, s.fa)
+	emitFs(ctx, w, s.fs)
+	emitFn(ctx, w, s.fn)
+	fmt.Fprintf(w, `);`)
+	return nil
+}
+
+type Circle struct {
+	radius interface{}
+	fa     *int
+	fn     *int
+	fs     *int
+}
+
+func NewCircle(radius interface{}) *Circle {
+	return &Circle{
+		radius: radius,
+	}
+}
+
+func (c *Circle) Fa(v int) *Circle {
+	c.fa = &v
+	return c
+}
+
+func (c *Circle) Fn(v int) *Circle {
+	c.fn = &v
+	return c
+}
+
+func (c *Circle) Fs(v int) *Circle {
+	c.fs = &v
+	return c
+}
+
+func (c *Circle) EmitExpr(ctx context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `circle(r=`)
+	if c.radius == nil {
+		return fmt.Errorf("radius must be specified")
+	}
+	emitValue(ctx, w, c.radius)
+	emitFa(ctx, w, c.fa)
+	emitFn(ctx, w, c.fn)
+	emitFs(ctx, w, c.fs)
+	fmt.Fprintf(w, `)`)
+	return nil
+}
+
+func (c *Circle) EmitStmt(ctx context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `%s`, GetIndent(ctx))
+	if err := c.EmitExpr(ctx, w); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, `;`)
 	return nil
 }
