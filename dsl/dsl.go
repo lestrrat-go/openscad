@@ -2,7 +2,7 @@ package dsl
 
 import "github.com/lestrrat-go/openscad"
 
-func Call(name string, parameters ...*openscad.Variable) *openscad.Call {
+func Call(name string, parameters ...interface{}) *openscad.Call {
 	call := openscad.NewCall(name)
 	if len(parameters) > 0 {
 		call.Parameters(parameters...)
@@ -24,6 +24,10 @@ func For(vars ...*openscad.LoopVar) *openscad.For {
 
 func ForRange(start, end interface{}) *openscad.ForRange {
 	return openscad.NewForRange(start, end)
+}
+
+func Function(name string) *openscad.Function {
+	return openscad.NewFunction(name)
 }
 
 func Let(vars ...*openscad.Variable) *openscad.Let {

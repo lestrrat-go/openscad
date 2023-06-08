@@ -197,7 +197,7 @@ func (m *Module) EmitStmt(ctx context.Context, w io.Writer) error {
 
 type Call struct {
 	name       string
-	parameters []*Variable
+	parameters []interface{}
 	children   []Stmt
 }
 
@@ -207,7 +207,7 @@ func NewCall(name string) *Call {
 	}
 }
 
-func (c *Call) Parameters(params ...*Variable) *Call {
+func (c *Call) Parameters(params ...interface{}) *Call {
 	c.parameters = append(c.parameters, params...)
 	return c
 }
@@ -244,4 +244,55 @@ func (c *Call) EmitExpr(ctx context.Context, w io.Writer) error {
 	}
 	fmt.Fprintf(w, ")")
 	return nil
+}
+
+type Function struct {
+	name       string
+	parameters []*Variable
+	body       Expr
+}
+
+func NewFunction(name string) *Function {
+	return &Function{
+		name: name,
+	}
+}
+
+func (f *Function) Parameters(params ...*Variable) *Function {
+	f.parameters = append(f.parameters, params...)
+	return f
+}
+
+func (f *Function) Body(body Expr) *Function {
+	f.body = body
+	return f
+}
+
+func (f *Function) EmitStmt(ctx context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `%s`, GetIndent(ctx))
+	if err := f.EmitExpr(ctx, w); err != nil {
+		return err
+	}
+	fmt.Fprint(w, `;`)
+	return nil
+}
+
+func (f *Function) EmitExpr(ctx context.Context, w io.Writer) error {
+	fmt.Fprintf(w, `function %s(`, f.name)
+
+	ctx = context.WithValue(ctx, identAssignment{}, false)
+	for i, p := range f.parameters {
+		if i > 0 {
+			fmt.Fprintf(w, `, `)
+		}
+		if err := emitExpr(ctx, w, p); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(w, ") = ")
+
+	if f.body == nil {
+		return fmt.Errorf(`expected a body`)
+	}
+	return f.body.EmitExpr(AddIndent(ctx), w)
 }
