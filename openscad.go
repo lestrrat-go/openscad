@@ -18,25 +18,45 @@ const (
 // The object is immutable once created. To change the values,
 // create a new context using one of the provided methods
 type EmitContext struct {
+	amalgamated     map[string]struct{}
+	registry        *Registry
 	indent          string
 	as              int
 	allowAssignment bool
+	amalgamate      bool
+}
+
+func newEmitContext() *EmitContext {
+	return &EmitContext{
+		registry: globalRegistry,
+	}
+}
+
+func (e *EmitContext) Amalgamate() bool {
+	return e.amalgamate
+}
+
+func (e *EmitContext) Copy() *EmitContext {
+	return &EmitContext{
+		indent:          e.indent,
+		amalgamate:      e.amalgamate,
+		amalgamated:     e.amalgamated,
+		registry:        e.registry,
+		as:              e.as,
+		allowAssignment: e.allowAssignment,
+	}
 }
 
 func (e *EmitContext) ForceExpr() *EmitContext {
-	return &EmitContext{
-		indent:          e.indent,
-		as:              asExpr,
-		allowAssignment: e.allowAssignment,
-	}
+	e2 := e.Copy()
+	e2.as = asExpr
+	return e2
 }
 
 func (e *EmitContext) ForceStmt() *EmitContext {
-	return &EmitContext{
-		indent:          e.indent,
-		as:              asStmt,
-		allowAssignment: e.allowAssignment,
-	}
+	e2 := e.Copy()
+	e2.as = asStmt
+	return e2
 }
 
 func (e *EmitContext) AsExpr() bool {
@@ -56,19 +76,15 @@ func (e *EmitContext) Indent() string {
 }
 
 func (e *EmitContext) WithIndent(indent string) *EmitContext {
-	return &EmitContext{
-		indent:          indent,
-		as:              e.as,
-		allowAssignment: e.allowAssignment,
-	}
+	e2 := e.Copy()
+	e2.indent = indent
+	return e2
 }
 
 func (e *EmitContext) WithAllowAssignment(allowAssignment bool) *EmitContext {
-	return &EmitContext{
-		indent:          e.indent,
-		as:              e.as,
-		allowAssignment: allowAssignment,
-	}
+	e2 := e.Copy()
+	e2.allowAssignment = allowAssignment
+	return e2
 }
 
 const indent = "  "
@@ -385,7 +401,21 @@ type inclusionDirective struct {
 	name string
 }
 
-func (i *inclusionDirective) EmitStmt(_ *EmitContext, w io.Writer) error {
+func (i *inclusionDirective) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	if ctx.Amalgamate() {
+		if _, ok := ctx.amalgamated[i.name]; ok {
+			return nil
+		}
+
+		ctx.amalgamated[i.name] = struct{}{}
+		stmts, ok := ctx.registry.Lookup(i.name)
+		if !ok {
+			return fmt.Errorf(`source file %q not found`, i.name)
+		}
+
+		return stmts.EmitStmt(ctx, w)
+	}
+
 	fmt.Fprintf(w, `%s <%s>`, i.typ, i.name)
 	return nil
 }
