@@ -413,7 +413,10 @@ func (i *inclusionDirective) EmitStmt(ctx *EmitContext, w io.Writer) error {
 			return fmt.Errorf(`source file %q not found`, i.name)
 		}
 
-		return stmts.EmitStmt(ctx, w)
+		if err := stmts.EmitStmt(ctx, w); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	fmt.Fprintf(w, `%s <%s>`, i.typ, i.name)

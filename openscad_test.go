@@ -9,6 +9,10 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
+var _ openscad.EmitOption = openscad.WithAmalgamation()
+var _ openscad.EmitFileOption = openscad.WithAmalgamation()
+var _ openscad.WriteFileOption = openscad.WithAmalgamation()
+
 func Example() {
 	width := dsl.Variable("width").Value(30)
 	stmts := dsl.Stmts(
