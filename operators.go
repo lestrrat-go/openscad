@@ -1,7 +1,6 @@
 package openscad
 
 import (
-	"context"
 	"fmt"
 	"io"
 )
@@ -20,7 +19,7 @@ func NewBinaryOp(op string, left, right interface{}) *BinaryOp {
 	}
 }
 
-func (op *BinaryOp) EmitExpr(ctx context.Context, w io.Writer) error {
+func (op *BinaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	emitValue(ctx, w, op.left)
 	fmt.Fprintf(w, `%s`, op.op)
 	emitValue(ctx, w, op.right)

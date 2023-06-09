@@ -1,7 +1,6 @@
 package openscad_test
 
 import (
-	"context"
 	"os"
 
 	"github.com/lestrrat-go/openscad"
@@ -30,7 +29,7 @@ func Example() {
 		dsl.Call("foobar"),
 	)
 
-	stmts.Emit(context.Background(), os.Stdout)
+	openscad.Emit(stmts, os.Stdout)
 	//OUTPUT:
 	// width=30;
 	//
@@ -63,5 +62,5 @@ func ExampleBezier2D() {
 		dsl.Polygon(points, nil),
 	)
 
-	stmts.Emit(context.Background(), os.Stdout)
+	openscad.Emit(stmts, os.Stdout)
 }

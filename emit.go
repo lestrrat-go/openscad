@@ -1,24 +1,21 @@
 package openscad
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"reflect"
 )
 
-const (
-	asExpr = iota
-	asStmt
-)
-
-type emitContext struct{}
-
-func emitExpr(ctx context.Context, w io.Writer, v interface{}) error {
-	return emitValue(context.WithValue(ctx, emitContext{}, asExpr), w, v)
+func Emit(stmt Stmt, w io.Writer) error {
+	ctx := &EmitContext{}
+	return stmt.EmitStmt(ctx, w)
 }
 
-func emitAny(ctx context.Context, w io.Writer, v interface{}) error {
+func emitExpr(ctx *EmitContext, w io.Writer, v interface{}) error {
+	return emitValue(ctx.ForceExpr(), w, v)
+}
+
+func emitAny(ctx *EmitContext, w io.Writer, v interface{}) error {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Slice:
@@ -41,20 +38,23 @@ func emitAny(ctx context.Context, w io.Writer, v interface{}) error {
 	return nil
 }
 
-func emitValue(ctx context.Context, w io.Writer, v interface{}) error {
-	emitCtx := ctx.Value(emitContext{})
-	switch emitCtx {
-	case nil, asExpr:
+func emitValue(ctx *EmitContext, w io.Writer, v interface{}) error {
+	if ctx.AsExpr() {
 		if e, ok := v.(Expr); ok {
 			return e.EmitExpr(ctx, w)
 		}
-		return emitAny(ctx, w, v)
-	case asStmt:
-		if e, ok := v.(Expr); ok {
-			return e.EmitExpr(ctx, w)
+	} else if ctx.AsStmt() {
+		if e, ok := v.(Stmt); ok {
+			return e.EmitStmt(ctx, w)
 		}
-		return emitAny(ctx, w, v)
-	default:
-		return emitAny(ctx, w, v)
+	} else {
+		switch v := v.(type) {
+		case Expr:
+			return v.EmitExpr(ctx, w)
+		case Stmt:
+			return v.EmitStmt(ctx, w)
+		}
 	}
+
+	return emitAny(ctx, w, v)
 }

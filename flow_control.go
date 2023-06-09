@@ -1,7 +1,6 @@
 package openscad
 
 import (
-	"context"
 	"fmt"
 	"io"
 )
@@ -27,9 +26,8 @@ func (l *Let) Add(stmt ...Stmt) *Let {
 	return l
 }
 
-func (l *Let) EmitStmt(ctx context.Context, w io.Writer) error {
-	indent := GetIndent(ctx)
-	fmt.Fprintf(w, `%slet(`, indent)
+func (l *Let) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%slet(`, ctx.Indent())
 	for i, v := range l.variables {
 		if i > 0 {
 			fmt.Fprintf(w, `, `)
@@ -59,7 +57,7 @@ func (fr *ForRange) Increment(incr interface{}) *ForRange {
 	return fr
 }
 
-func (fr *ForRange) EmitExpr(ctx context.Context, w io.Writer) error {
+func (fr *ForRange) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprint(w, `[`)
 	emitValue(ctx, w, fr.start)
 	fmt.Fprint(w, `:`)
@@ -84,12 +82,12 @@ func NewLoopVar(variable *Variable, expr interface{}) *LoopVar {
 	}
 }
 
-func (lv *LoopVar) EmitExpr(ctx context.Context, w io.Writer) error {
+func (lv *LoopVar) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	if err := emitValue(ctx, w, lv.variable); err != nil {
 		return err
 	}
 	fmt.Fprint(w, `=`)
-	if err := emitValue(context.WithValue(ctx, identAssignment{}, false), w, lv.expr); err != nil {
+	if err := emitValue(ctx.WithAllowAssignment(false), w, lv.expr); err != nil {
 		return err
 	}
 	return nil
@@ -111,10 +109,10 @@ func (f *For) Add(stmts ...Stmt) *For {
 	return f
 }
 
-func (f *For) EmitStmt(ctx context.Context, w io.Writer) error {
-	indent := GetIndent(ctx)
+func (f *For) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	indent := ctx.Indent()
 	fmt.Fprintf(w, "%sfor(", indent)
-	lctx := context.WithValue(ctx, identAssignment{}, false)
+	lctx := ctx.WithAllowAssignment(false)
 	for i, v := range f.loopVars {
 		if i > 0 {
 			fmt.Fprint(w, `, `)

@@ -1,7 +1,6 @@
 package openscad
 
 import (
-	"context"
 	"fmt"
 	"io"
 )
@@ -16,7 +15,7 @@ func (l *Point2DList) Add(pt *Point2D) {
 	*l = append(*l, pt)
 }
 
-func (l Point2DList) EmitExpr(ctx context.Context, w io.Writer) error {
+func (l Point2DList) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, `[`)
 	for i, pt := range l {
 		if i > 0 {
@@ -37,7 +36,7 @@ func NewPoint2D(x, y interface{}) *Point2D {
 	}
 }
 
-func (p *Point2D) EmitExpr(ctx context.Context, w io.Writer) error {
+func (p *Point2D) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, `[%#v, %#v]`, p.x, p.y)
 	return nil
 }
@@ -54,10 +53,9 @@ func NewPolygon(points, paths interface{}) *Polygon {
 	}
 }
 
-func (p *Polygon) EmitStmt(ctx context.Context, w io.Writer) error {
-	indent := GetIndent(ctx)
-	fmt.Fprintf(w, `%spolygon(points=`, indent)
-	ctx = context.WithValue(ctx, identAssignment{}, false)
+func (p *Polygon) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%spolygon(points=`, ctx.Indent())
+	ctx = ctx.WithAllowAssignment(false)
 	if err := emitValue(ctx, w, p.points); err != nil {
 		return err
 	}
@@ -71,30 +69,25 @@ func (p *Polygon) EmitStmt(ctx context.Context, w io.Writer) error {
 	return nil
 }
 
-func emitCenter(ctx context.Context, w io.Writer, ptr *bool) {
+func emitCenter(w io.Writer, ptr *bool) {
 	if ptr != nil && *ptr {
 		fmt.Fprintf(w, `, $fn=%t`, *ptr)
 	}
 }
 
-func emitFs(ctx context.Context, w io.Writer, ptr *int) {
-	emitInt(ctx, w, identFs{}, `$fs`, ptr)
+func emitFs(w io.Writer, ptr *int) {
+	emitInt(w, `$fs`, ptr)
 }
-func emitFa(ctx context.Context, w io.Writer, ptr *int) {
-	emitInt(ctx, w, identFa{}, `$fa`, ptr)
+func emitFa(w io.Writer, ptr *int) {
+	emitInt(w, `$fa`, ptr)
 }
-func emitFn(ctx context.Context, w io.Writer, ptr *int) {
-	emitInt(ctx, w, identFn{}, `$fn`, ptr)
+func emitFn(w io.Writer, ptr *int) {
+	emitInt(w, `$fn`, ptr)
 }
 
-func emitInt(ctx context.Context, w io.Writer, ident interface{}, name string, ptr *int) {
+func emitInt(w io.Writer, name string, ptr *int) {
 	if ptr != nil {
 		fmt.Fprintf(w, `, %s=%d`, name, *ptr)
-	} else {
-		var v int
-		if GetValue(ctx, ident, &v) == nil {
-			fmt.Fprintf(w, `, %s=%d`, name, v)
-		}
 	}
 }
 
@@ -122,9 +115,9 @@ func (c *Cube) Fn(v int) *Cube {
 	return c
 }
 
-func (c *Cube) EmitStmt(ctx context.Context, w io.Writer) error {
-	ctx = context.WithValue(ctx, identAssignment{}, false)
-	fmt.Fprintf(w, `%scube([`, GetIndent(ctx))
+func (c *Cube) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	ctx = ctx.WithAllowAssignment(false)
+	fmt.Fprintf(w, `%scube([`, ctx.Indent())
 	emitValue(ctx, w, c.width)
 	fmt.Fprintf(w, `, `)
 	emitValue(ctx, w, c.depth)
@@ -132,8 +125,8 @@ func (c *Cube) EmitStmt(ctx context.Context, w io.Writer) error {
 	emitValue(ctx, w, c.height)
 	fmt.Fprintf(w, `]`)
 
-	emitCenter(ctx, w, c.center)
-	emitFn(ctx, w, c.fn)
+	emitCenter(w, c.center)
+	emitFn(w, c.fn)
 	fmt.Fprintf(w, `);`) // cubes are always terminated with a semicolon
 	return nil
 }
@@ -175,8 +168,8 @@ func (c *Cylinder) Fn(v int) *Cylinder {
 	return c
 }
 
-func (c *Cylinder) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `%scylinder(h=`, GetIndent(ctx))
+func (c *Cylinder) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%scylinder(h=`, ctx.Indent())
 	if c.height == nil {
 		return fmt.Errorf("height must be specified")
 	}
@@ -195,10 +188,10 @@ func (c *Cylinder) EmitStmt(ctx context.Context, w io.Writer) error {
 		fmt.Fprint(w, `, r2=`)
 		emitValue(ctx, w, c.radius2)
 	}
-	emitCenter(ctx, w, c.center)
-	emitFa(ctx, w, c.fa)
-	emitFs(ctx, w, c.fs)
-	emitFn(ctx, w, c.fn)
+	emitCenter(w, c.center)
+	emitFa(w, c.fa)
+	emitFs(w, c.fs)
+	emitFn(w, c.fn)
 	fmt.Fprintf(w, `);`) // cylinders are always terminated with a semicolon
 	return nil
 }
@@ -217,8 +210,8 @@ func (c *Children) Index(idx int) *Children {
 	return c
 }
 
-func (c *Children) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `%schildren(`, GetIndent(ctx))
+func (c *Children) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%schildren(`, ctx.Indent())
 	if c.idx != nil {
 		fmt.Fprintf(w, `%d`, *c.idx)
 	}
@@ -254,15 +247,15 @@ func (s *Sphere) Fn(v int) *Sphere {
 	return s
 }
 
-func (s *Sphere) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `%ssphere(r=`, GetIndent(ctx))
+func (s *Sphere) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%ssphere(r=`, ctx.Indent())
 	if s.radius == nil {
 		return fmt.Errorf("radius must be specified")
 	}
 	emitValue(ctx, w, s.radius)
-	emitFa(ctx, w, s.fa)
-	emitFs(ctx, w, s.fs)
-	emitFn(ctx, w, s.fn)
+	emitFa(w, s.fa)
+	emitFs(w, s.fs)
+	emitFn(w, s.fn)
 	fmt.Fprintf(w, `);`)
 	return nil
 }
@@ -295,21 +288,21 @@ func (c *Circle) Fs(v int) *Circle {
 	return c
 }
 
-func (c *Circle) EmitExpr(ctx context.Context, w io.Writer) error {
+func (c *Circle) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, `circle(r=`)
 	if c.radius == nil {
 		return fmt.Errorf("radius must be specified")
 	}
 	emitValue(ctx, w, c.radius)
-	emitFa(ctx, w, c.fa)
-	emitFn(ctx, w, c.fn)
-	emitFs(ctx, w, c.fs)
+	emitFa(w, c.fa)
+	emitFn(w, c.fn)
+	emitFs(w, c.fs)
 	fmt.Fprintf(w, `)`)
 	return nil
 }
 
-func (c *Circle) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `%s`, GetIndent(ctx))
+func (c *Circle) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%s`, ctx.Indent())
 	if err := c.EmitExpr(ctx, w); err != nil {
 		return err
 	}

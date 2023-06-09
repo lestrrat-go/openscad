@@ -1,7 +1,6 @@
 package openscad
 
 import (
-	"context"
 	"fmt"
 	"io"
 )
@@ -23,15 +22,15 @@ func (t *Translate) Add(s Stmt) *Translate {
 	return t
 }
 
-func (t *Translate) EmitExpr(ctx context.Context, w io.Writer) error {
+func (t *Translate) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprint(w, `translate(`)
 	emitExpr(ctx, w, t.v)
 	fmt.Fprint(w, `)`)
 	return emitChildren(ctx, w, t.children)
 }
 
-func (t *Translate) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprint(w, GetIndent(ctx))
+func (t *Translate) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprint(w, ctx.Indent())
 	return t.EmitExpr(ctx, w)
 }
 
@@ -54,8 +53,8 @@ func (r *Rotate) Add(s Stmt) *Rotate {
 	return r
 }
 
-func (r *Rotate) EmitStmt(ctx context.Context, w io.Writer) error {
-	indent := GetIndent(ctx)
+func (r *Rotate) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	indent := ctx.Indent()
 	fmt.Fprintf(w, `%srotate([%#v, %#v, %#v])`, indent, r.dx, r.dy, r.dz)
 
 	return emitChildren(ctx, w, r.children)
@@ -92,9 +91,9 @@ func (l *LinearExtrude) Fn(fn int) *LinearExtrude {
 	return l
 }
 
-func (l *LinearExtrude) EmitStmt(ctx context.Context, w io.Writer) error {
-	ctx = context.WithValue(ctx, identAssignment{}, false)
-	fmt.Fprintf(w, `%slinear_extrude(height=`, GetIndent(ctx))
+func (l *LinearExtrude) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	ctx = ctx.WithAllowAssignment(false)
+	fmt.Fprintf(w, `%slinear_extrude(height=`, ctx.Indent())
 	if l.height == nil {
 		return fmt.Errorf("height must be specified")
 	}
@@ -116,7 +115,7 @@ func (l *LinearExtrude) EmitStmt(ctx context.Context, w io.Writer) error {
 		emitValue(ctx, w, l.scale)
 	}
 	if l.fn != nil {
-		emitFn(ctx, w, l.fn)
+		emitFn(w, l.fn)
 	}
 	fmt.Fprint(w, `)`)
 	return emitChildren(ctx, w, l.children)

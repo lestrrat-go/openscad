@@ -1,7 +1,6 @@
 package openscad
 
 import (
-	"context"
 	"fmt"
 	"io"
 )
@@ -21,8 +20,7 @@ func (u *Union) Add(s Stmt) *Union {
 	return u
 }
 
-func (u *Union) EmitStmt(ctx context.Context, w io.Writer) error {
-	indent := GetIndent(ctx)
-	fmt.Fprintf(w, `%sunion()`, indent)
+func (u *Union) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%sunion()`, ctx.Indent())
 	return emitChildren(ctx, w, u.children)
 }

@@ -4,43 +4,87 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/lestrrat-go/blackmagic"
 )
 
-var globalRegistry = &Registry{
-	storage: make(map[string]Stmt),
+const (
+	asNone = iota
+	asExpr
+	asStmt
+)
+
+// EmitContext holds the context for emitting OpenSCAD code.
+// The object is immutable once created. To change the values,
+// create a new context using one of the provided methods
+type EmitContext struct {
+	indent          string
+	as              int
+	allowAssignment bool
 }
 
-func Register(name string, s Stmt) error {
-	return globalRegistry.Register(name, s)
-}
-
-func Lookup(name string) (Stmt, bool) {
-	return globalRegistry.Lookup(name)
-}
-
-type Registry struct {
-	mu      sync.RWMutex
-	storage map[string]Stmt
-}
-
-func (r *Registry) Register(name string, s Stmt) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.storage[name] = s
-	return nil
-}
-
-func (r *Registry) Lookup(name string) (Stmt, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	if r.storage == nil {
-		return nil, false
+func (e *EmitContext) ForceExpr() *EmitContext {
+	return &EmitContext{
+		indent:          e.indent,
+		as:              asExpr,
+		allowAssignment: e.allowAssignment,
 	}
-	s, ok := r.storage[name]
-	return s, ok
+}
+
+func (e *EmitContext) ForceStmt() *EmitContext {
+	return &EmitContext{
+		indent:          e.indent,
+		as:              asStmt,
+		allowAssignment: e.allowAssignment,
+	}
+}
+
+func (e *EmitContext) AsExpr() bool {
+	return e.as == asExpr
+}
+
+func (e *EmitContext) AsStmt() bool {
+	return e.as == asStmt
+}
+
+func (e *EmitContext) AllowAssignment() bool {
+	return e.allowAssignment
+}
+
+func (e *EmitContext) Indent() string {
+	return e.indent
+}
+
+func (e *EmitContext) WithIndent(indent string) *EmitContext {
+	return &EmitContext{
+		indent:          indent,
+		as:              e.as,
+		allowAssignment: e.allowAssignment,
+	}
+}
+
+func (e *EmitContext) WithAllowAssignment(allowAssignment bool) *EmitContext {
+	return &EmitContext{
+		indent:          e.indent,
+		as:              e.as,
+		allowAssignment: allowAssignment,
+	}
+}
+
+const indent = "  "
+
+func (e *EmitContext) IncrIndent() *EmitContext {
+	return e.WithIndent(e.indent + indent)
+}
+
+func (e *EmitContext) DecrIndent() *EmitContext {
+	if e.indent == "" {
+		return e
+	}
+	if len(e.indent) < len(indent) {
+		return e.WithIndent("")
+	}
+	return e.WithIndent(e.indent[:len(e.indent)-len(indent)])
 }
 
 // Expr represents an expression in the OpenSCAD language.
@@ -48,7 +92,7 @@ func (r *Registry) Lookup(name string) (Stmt, bool) {
 // An arbitrary object may be either an Expr or a Stmt, or both.
 // For example, a *Variable is both an Expr and a Stmt.
 type Expr interface {
-	EmitExpr(context.Context, io.Writer) error
+	EmitExpr(*EmitContext, io.Writer) error
 }
 
 // Stmt repreents an OpenSCAD statement.
@@ -56,7 +100,7 @@ type Expr interface {
 // An arbitrary object may be either an Expr or a Stmt, or both.
 // For example, a *Variable is both an Expr and a Stmt.
 type Stmt interface {
-	EmitStmt(context.Context, io.Writer) error
+	EmitStmt(*EmitContext, io.Writer) error
 }
 
 type identFa struct{}
@@ -92,12 +136,8 @@ func AddIndent(ctx context.Context) context.Context {
 // Stmts is a sequence of statements.
 type Stmts []Stmt
 
-func (stmts Stmts) Emit(ctx context.Context, w io.Writer) error {
-	return stmts.EmitStmt(ctx, w)
-}
-
-func (stmts Stmts) EmitStmt(ctx context.Context, w io.Writer) error {
-	ctx = context.WithValue(ctx, identAssignment{}, true)
+func (stmts Stmts) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	ctx = ctx.WithAllowAssignment(true)
 	for i, stmt := range stmts {
 		if i > 0 {
 			fmt.Fprintf(w, "\n")
@@ -109,6 +149,9 @@ func (stmts Stmts) EmitStmt(ctx context.Context, w io.Writer) error {
 	return nil
 }
 
+// Variable represents a variable in the OpenSCAD language.
+// It can be assigned a value so that in appropriate contexts,
+// an assignment statement is emitted.
 type Variable struct {
 	name  string
 	value interface{}
@@ -129,11 +172,11 @@ func (p *Variable) Value(v interface{}) *Variable {
 	return p
 }
 
-func (p *Variable) EmitExpr(ctx context.Context, w io.Writer) error {
-	if getBool(ctx, identAssignment{}) && p.value != nil {
+func (p *Variable) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	if ctx.AllowAssignment() && p.value != nil {
 		fmt.Fprintf(w, `%s=`, p.name)
 		// Remove the assignment flag
-		if err := emitValue(context.WithValue(ctx, identAssignment{}, false), w, p.value); err != nil {
+		if err := emitValue(ctx.WithAllowAssignment(false), w, p.value); err != nil {
 			return err
 		}
 		return nil
@@ -142,9 +185,9 @@ func (p *Variable) EmitExpr(ctx context.Context, w io.Writer) error {
 	return nil
 }
 
-func (p *Variable) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprint(w, GetIndent(ctx))
-	if err := p.EmitExpr(context.WithValue(ctx, identAssignment{}, true), w); err != nil {
+func (p *Variable) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprint(w, ctx.Indent())
+	if err := p.EmitExpr(ctx.WithAllowAssignment(true), w); err != nil {
 		return err
 	}
 	fmt.Fprint(w, `;`)
@@ -168,22 +211,23 @@ type Module struct {
 	children   []Stmt
 }
 
-func emitChildren(ctx context.Context, w io.Writer, children []Stmt) error {
-	indent := GetIndent(ctx)
+func emitChildren(ctx *EmitContext, w io.Writer, children []Stmt) error {
+	indent := ctx.Indent()
 	numc := len(children)
 	if numc == 0 {
 		return fmt.Errorf(`expected at least one child`)
 	}
 
+	ctx = ctx.IncrIndent()
 	if numc == 1 {
 		fmt.Fprintf(w, "\n")
-		return children[0].EmitStmt(AddIndent(ctx), w)
+		return children[0].EmitStmt(ctx, w)
 	}
 
 	fmt.Fprintf(w, "\n%s{", indent)
 	for _, c := range children {
 		fmt.Fprintf(w, "\n")
-		if err := c.EmitStmt(AddIndent(ctx), w); err != nil {
+		if err := c.EmitStmt(ctx, w); err != nil {
 			return err
 		}
 	}
@@ -207,11 +251,11 @@ func (m *Module) Actions(children ...Stmt) *Module {
 	return m
 }
 
-func (m *Module) EmitStmt(ctx context.Context, w io.Writer) error {
+func (m *Module) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, "\nmodule %s(", m.name)
 
 	{
-		pctx := context.WithValue(ctx, identAssignment{}, true)
+		pctx := ctx.WithAllowAssignment(true)
 		for i, param := range m.parameters {
 			if i > 0 {
 				fmt.Fprintf(w, ", ")
@@ -221,9 +265,10 @@ func (m *Module) EmitStmt(ctx context.Context, w io.Writer) error {
 	}
 	fmt.Fprintf(w, ")\n{")
 
+	ctx = ctx.IncrIndent()
 	for _, c := range m.children {
 		fmt.Fprintf(w, "\n")
-		if err := c.EmitStmt(AddIndent(ctx), w); err != nil {
+		if err := c.EmitStmt(ctx, w); err != nil {
 			return err
 		}
 	}
@@ -253,8 +298,8 @@ func (c *Call) Add(children ...Stmt) *Call {
 	return c
 }
 
-func (c *Call) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `%s`, GetIndent(ctx))
+func (c *Call) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%s`, ctx.Indent())
 	if err := c.EmitExpr(ctx, w); err != nil {
 		return err
 	}
@@ -262,14 +307,16 @@ func (c *Call) EmitStmt(ctx context.Context, w io.Writer) error {
 	if children := c.children; len(children) > 0 {
 		return emitChildren(ctx, w, children)
 	}
+
+	// only emit the last semicolon if there are no children
 	fmt.Fprint(w, `;`)
 	return nil
 }
 
-func (c *Call) EmitExpr(ctx context.Context, w io.Writer) error {
+func (c *Call) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, `%s(`, c.name)
 
-	ctx = context.WithValue(ctx, identAssignment{}, false)
+	ctx = ctx.WithAllowAssignment(false)
 	for i, p := range c.parameters {
 		if i > 0 {
 			fmt.Fprintf(w, `, `)
@@ -304,8 +351,8 @@ func (f *Function) Body(body interface{}) *Function {
 	return f
 }
 
-func (f *Function) EmitStmt(ctx context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `%s`, GetIndent(ctx))
+func (f *Function) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%s`, ctx.Indent())
 	if err := f.EmitExpr(ctx, w); err != nil {
 		return err
 	}
@@ -313,10 +360,10 @@ func (f *Function) EmitStmt(ctx context.Context, w io.Writer) error {
 	return nil
 }
 
-func (f *Function) EmitExpr(ctx context.Context, w io.Writer) error {
+func (f *Function) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, `function %s(`, f.name)
 
-	ctx = context.WithValue(ctx, identAssignment{}, false)
+	ctx = ctx.WithAllowAssignment(true)
 	for i, p := range f.parameters {
 		if i > 0 {
 			fmt.Fprintf(w, `, `)
@@ -333,32 +380,38 @@ func (f *Function) EmitExpr(ctx context.Context, w io.Writer) error {
 	return emitExpr(ctx, w, f.body)
 }
 
-type Include struct {
+type inclusionDirective struct {
+	typ  string
 	name string
+}
+
+func (i *inclusionDirective) EmitStmt(_ *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%s <%s>`, i.typ, i.name)
+	return nil
+}
+
+type Include struct {
+	inclusionDirective
 }
 
 func NewInclude(name string) *Include {
 	return &Include{
-		name: name,
+		inclusionDirective: inclusionDirective{
+			typ:  `include`,
+			name: name,
+		},
 	}
 }
 
-func (i *Include) EmitStmt(_ context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `include <%s>`, i.name)
-	return nil
-}
-
 type Use struct {
-	name string
+	inclusionDirective
 }
 
 func NewUse(name string) *Use {
 	return &Use{
-		name: name,
+		inclusionDirective: inclusionDirective{
+			typ:  `use`,
+			name: name,
+		},
 	}
-}
-
-func (i *Use) EmitStmt(_ context.Context, w io.Writer) error {
-	fmt.Fprintf(w, `use <%s>`, i.name)
-	return nil
 }
