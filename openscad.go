@@ -192,7 +192,7 @@ func (p *Variable) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	if ctx.AllowAssignment() && p.value != nil {
 		fmt.Fprintf(w, `%s=`, p.name)
 		// Remove the assignment flag
-		if err := emitValue(ctx.WithAllowAssignment(false), w, p.value); err != nil {
+		if err := emitExpr(ctx.WithAllowAssignment(false), w, p.value); err != nil {
 			return err
 		}
 		return nil

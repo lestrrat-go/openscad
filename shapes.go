@@ -293,7 +293,9 @@ func (c *Circle) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	if c.radius == nil {
 		return fmt.Errorf("radius must be specified")
 	}
-	emitValue(ctx, w, c.radius)
+	if err := emitExpr(ctx.WithAllowAssignment(false), w, c.radius); err != nil {
+		return err
+	}
 	emitFa(w, c.fa)
 	emitFn(w, c.fn)
 	emitFs(w, c.fs)
