@@ -169,6 +169,7 @@ func (c *Cylinder) Fn(v int) *Cylinder {
 }
 
 func (c *Cylinder) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	ctx = ctx.WithAllowAssignment(false)
 	fmt.Fprintf(w, `%scylinder(h=`, ctx.Indent())
 	if c.height == nil {
 		return fmt.Errorf("height must be specified")
@@ -309,5 +310,49 @@ func (c *Circle) EmitStmt(ctx *EmitContext, w io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(w, `;`)
+	return nil
+}
+
+type Polyhedron struct {
+	points    interface{}
+	faces     interface{}
+	convexity interface{}
+}
+
+func NewPolyhedron(points, faces interface{}) *Polyhedron {
+	return &Polyhedron{
+		points: points,
+		faces:  faces,
+	}
+}
+
+func (p *Polyhedron) Convexity(v interface{}) *Polyhedron {
+	p.convexity = v
+	return p
+}
+
+func (p *Polyhedron) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%spolyhedron(points=`, ctx.Indent())
+	ctx = ctx.WithAllowAssignment(false)
+	if p.points == nil {
+		return fmt.Errorf("points must be specified")
+	}
+	if err := emitExpr(ctx, w, p.points); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, `, faces=`)
+	if p.faces == nil {
+		return fmt.Errorf("faces must be specified")
+	}
+	if err := emitExpr(ctx, w, p.faces); err != nil {
+		return err
+	}
+	if p.convexity != nil {
+		fmt.Fprintf(w, `, convexity=`)
+		if err := emitExpr(ctx, w, p.convexity); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(w, `);`)
 	return nil
 }

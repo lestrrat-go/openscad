@@ -17,6 +17,12 @@ func NewTranslate(v interface{}, children ...Stmt) *Translate {
 	}
 }
 
+func (t *Translate) Body(children ...Stmt) *Translate {
+	t.children = make([]Stmt, len(children))
+	copy(t.children, children)
+	return t
+}
+
 func (t *Translate) Add(s Stmt) *Translate {
 	t.children = append(t.children, s)
 	return t
@@ -24,7 +30,7 @@ func (t *Translate) Add(s Stmt) *Translate {
 
 func (t *Translate) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprint(w, `translate(`)
-	emitExpr(ctx, w, t.v)
+	emitExpr(ctx.WithAllowAssignment(false), w, t.v)
 	fmt.Fprint(w, `)`)
 	return emitChildren(ctx, w, t.children)
 }
@@ -35,17 +41,21 @@ func (t *Translate) EmitStmt(ctx *EmitContext, w io.Writer) error {
 }
 
 type Rotate struct {
-	dx, dy, dz interface{} // angles
-	children   []Stmt
+	v        interface{}
+	children []Stmt
 }
 
-func NewRotate(dx, dy, dz interface{}, children ...Stmt) *Rotate {
+func NewRotate(v interface{}, children ...Stmt) *Rotate {
 	return &Rotate{
-		dx:       dx,
-		dy:       dy,
-		dz:       dz,
+		v:        v,
 		children: children,
 	}
+}
+
+func (r *Rotate) Body(children ...Stmt) *Rotate {
+	r.children = make([]Stmt, len(children))
+	copy(r.children, children)
+	return r
 }
 
 func (r *Rotate) Add(s Stmt) *Rotate {
@@ -55,7 +65,9 @@ func (r *Rotate) Add(s Stmt) *Rotate {
 
 func (r *Rotate) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	indent := ctx.Indent()
-	fmt.Fprintf(w, `%srotate([%#v, %#v, %#v])`, indent, r.dx, r.dy, r.dz)
+	fmt.Fprintf(w, `%srotate(`, indent)
+	emitExpr(ctx, w, r.v)
+	fmt.Fprint(w, `)`)
 
 	return emitChildren(ctx, w, r.children)
 }
@@ -119,4 +131,20 @@ func (l *LinearExtrude) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	}
 	fmt.Fprint(w, `)`)
 	return emitChildren(ctx, w, l.children)
+}
+
+type Hull struct{ noArgBlock }
+
+func NewHull() *Hull {
+	return &Hull{noArgBlock{name: "hull"}}
+}
+
+func (h *Hull) Add(s Stmt) *Hull {
+	h.noArgBlock.Add(s)
+	return h
+}
+
+func (h *Hull) Body(s ...Stmt) *Hull {
+	h.noArgBlock.Body(s...)
+	return h
 }

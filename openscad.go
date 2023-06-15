@@ -24,11 +24,13 @@ type EmitContext struct {
 	as              int
 	allowAssignment bool
 	amalgamate      bool
+	nestedBinaryOp  bool
 }
 
 func newEmitContext() *EmitContext {
 	return &EmitContext{
-		registry: globalRegistry,
+		allowAssignment: true,
+		registry:        globalRegistry,
 	}
 }
 
@@ -44,6 +46,7 @@ func (e *EmitContext) Copy() *EmitContext {
 		registry:        e.registry,
 		as:              e.as,
 		allowAssignment: e.allowAssignment,
+		nestedBinaryOp:  e.nestedBinaryOp,
 	}
 }
 
@@ -71,6 +74,10 @@ func (e *EmitContext) AllowAssignment() bool {
 	return e.allowAssignment
 }
 
+func (e *EmitContext) IsNestedBinaryOp() bool {
+	return e.nestedBinaryOp
+}
+
 func (e *EmitContext) Indent() string {
 	return e.indent
 }
@@ -84,6 +91,12 @@ func (e *EmitContext) WithIndent(indent string) *EmitContext {
 func (e *EmitContext) WithAllowAssignment(allowAssignment bool) *EmitContext {
 	e2 := e.Copy()
 	e2.allowAssignment = allowAssignment
+	return e2
+}
+
+func (e *EmitContext) WithNestedBinaryOp(v bool) *EmitContext {
+	e2 := e.Copy()
+	e2.nestedBinaryOp = v
 	return e2
 }
 
@@ -163,6 +176,24 @@ func (stmts Stmts) EmitStmt(ctx *EmitContext, w io.Writer) error {
 		}
 	}
 	return nil
+}
+
+type Declare struct {
+	v *Variable
+}
+
+func NewDeclare(v *Variable) *Declare {
+	return &Declare{
+		v: v,
+	}
+}
+
+func (d *Declare) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	return d.v.EmitExpr(ctx.WithAllowAssignment(true), w)
+}
+
+func (d *Declare) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	return d.v.EmitStmt(ctx, w)
 }
 
 // Variable represents a variable in the OpenSCAD language.
@@ -267,6 +298,12 @@ func (m *Module) Actions(children ...Stmt) *Module {
 	return m
 }
 
+func (m *Module) Body(children ...Stmt) *Module {
+	m.children = make([]Stmt, len(children))
+	copy(m.children, children)
+	return m
+}
+
 func (m *Module) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, "\nmodule %s(", m.name)
 
@@ -345,57 +382,6 @@ func (c *Call) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	return nil
 }
 
-type Function struct {
-	name       string
-	parameters []*Variable
-	body       interface{}
-}
-
-func NewFunction(name string) *Function {
-	return &Function{
-		name: name,
-	}
-}
-
-func (f *Function) Parameters(params ...*Variable) *Function {
-	f.parameters = append(f.parameters, params...)
-	return f
-}
-
-func (f *Function) Body(body interface{}) *Function {
-	f.body = body
-	return f
-}
-
-func (f *Function) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprintf(w, `%s`, ctx.Indent())
-	if err := f.EmitExpr(ctx, w); err != nil {
-		return err
-	}
-	fmt.Fprint(w, `;`)
-	return nil
-}
-
-func (f *Function) EmitExpr(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprintf(w, `function %s(`, f.name)
-
-	ctx = ctx.WithAllowAssignment(true)
-	for i, p := range f.parameters {
-		if i > 0 {
-			fmt.Fprintf(w, `, `)
-		}
-		if err := emitExpr(ctx, w, p); err != nil {
-			return err
-		}
-	}
-	fmt.Fprintf(w, ") = ")
-
-	if f.body == nil {
-		return fmt.Errorf(`expected a body`)
-	}
-	return emitExpr(ctx, w, f.body)
-}
-
 type inclusionDirective struct {
 	typ  string
 	name string
@@ -413,9 +399,11 @@ func (i *inclusionDirective) EmitStmt(ctx *EmitContext, w io.Writer) error {
 			return fmt.Errorf(`source file %q not found`, i.name)
 		}
 
+		fmt.Fprintf(w, "\n\n// START %s %s\n", i.typ, i.name)
 		if err := stmts.EmitStmt(ctx, w); err != nil {
 			return err
 		}
+		fmt.Fprintf(w, "\n// END %s %s\n", i.typ, i.name)
 		return nil
 	}
 
@@ -447,4 +435,40 @@ func NewUse(name string) *Use {
 			name: name,
 		},
 	}
+}
+
+type Render struct{ noArgBlock }
+
+func NewRender() *Render {
+	return &Render{noArgBlock{name: `render`}}
+}
+
+func (r *Render) Body(children ...Stmt) *Render {
+	r.children = make([]Stmt, len(children))
+	copy(r.children, children)
+	return r
+}
+
+type Index struct {
+	expr  interface{}
+	index interface{}
+}
+
+func NewIndex(expr, index interface{}) *Index {
+	return &Index{
+		expr:  expr,
+		index: index,
+	}
+}
+
+func (i *Index) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	if err := emitExpr(ctx, w, i.expr); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "[")
+	if err := emitExpr(ctx, w, i.index); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "]")
+	return nil
 }

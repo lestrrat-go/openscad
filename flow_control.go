@@ -21,12 +21,18 @@ func NewLet(variables ...*Variable) *Let {
 	}
 }
 
+func (l *Let) Body(children ...Stmt) *Let {
+	l.children = make([]Stmt, len(children))
+	copy(l.children, children)
+	return l
+}
+
 func (l *Let) Add(stmt ...Stmt) *Let {
 	l.children = append(l.children, stmt...)
 	return l
 }
 
-func (l *Let) EmitStmt(ctx *EmitContext, w io.Writer) error {
+func (l *Let) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, `%slet(`, ctx.Indent())
 	for i, v := range l.variables {
 		if i > 0 {
@@ -93,36 +99,118 @@ func (lv *LoopVar) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	return nil
 }
 
-type For struct {
+type ForExpr struct {
 	loopVars []*LoopVar
-	children []Stmt
+	expr     interface{}
 }
 
-func NewFor(loopVars []*LoopVar) *For {
-	return &For{
+func NewForExpr(loopVars []*LoopVar) *ForExpr {
+	return &ForExpr{
 		loopVars: loopVars,
 	}
 }
 
-func (f *For) Add(stmts ...Stmt) *For {
+func (f *ForExpr) Body(expr interface{}) *ForExpr {
+	f.expr = expr
+	return f
+}
+
+func emitForDecl(ctx *EmitContext, w io.Writer, loopVars []*LoopVar) error {
+	fmt.Fprint(w, "for (")
+	ctx = ctx.WithAllowAssignment(false)
+	for i, v := range loopVars {
+		if i > 0 {
+			fmt.Fprint(w, `, `)
+		}
+		if err := emitExpr(ctx, w, v); err != nil {
+			return err
+		}
+	}
+	fmt.Fprint(w, `)`)
+	return nil
+}
+
+func (f *ForExpr) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	if err := emitForDecl(ctx, w, f.loopVars); err != nil {
+		return err
+	}
+
+	if err := emitExpr(ctx, w, f.expr); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ForBlock represents a for loop block.
+//
+// In OpenSCAD for can take two distinctive styles: one as an expression, and
+// one as a statement. ForBlock the expression, use ForExpr
+type ForBlock struct {
+	loopVars []*LoopVar
+	children []Stmt
+}
+
+func NewFor(loopVars []*LoopVar) *ForBlock {
+	return &ForBlock{
+		loopVars: loopVars,
+	}
+}
+
+func (f *ForBlock) Body(stmts ...Stmt) *ForBlock {
+	f.children = make([]Stmt, len(stmts))
+	copy(f.children, stmts)
+	return f
+}
+
+func (f *ForBlock) Add(stmts ...Stmt) *ForBlock {
 	f.children = append(f.children, stmts...)
 	return f
 }
 
-func (f *For) EmitStmt(ctx *EmitContext, w io.Writer) error {
+func (f *ForBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	indent := ctx.Indent()
-	fmt.Fprintf(w, "%sfor(", indent)
-	lctx := ctx.WithAllowAssignment(false)
-	for i, v := range f.loopVars {
-		if i > 0 {
-			fmt.Fprint(w, `, `)
-		}
-		if err := emitValue(lctx, w, v); err != nil {
-			return err
-		}
+	fmt.Fprint(w, indent)
+	if err := emitForDecl(ctx, w, f.loopVars); err != nil {
+		return err
 	}
-	fmt.Fprint(w, `) {`)
+	fmt.Fprint(w, `{`)
 	emitChildren(ctx, w, f.children)
 	fmt.Fprintf(w, "\n%s}", indent)
 	return nil
+}
+
+type TernaryOp struct {
+	condition interface{}
+	trueExpr  interface{}
+	falseExpr interface{}
+}
+
+func NewTernaryOp(condition, trueExpr, falseExpr interface{}) *TernaryOp {
+	return &TernaryOp{
+		condition: condition,
+		trueExpr:  trueExpr,
+		falseExpr: falseExpr,
+	}
+}
+
+func (op *TernaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	ctx = ctx.WithAllowAssignment(false)
+	fmt.Fprint(w, `(`)
+	if err := emitValue(ctx, w, op.condition); err != nil {
+		return err
+	}
+	fmt.Fprint(w, `?`)
+	if err := emitValue(ctx, w, op.trueExpr); err != nil {
+		return err
+	}
+	fmt.Fprint(w, `:`)
+	if err := emitValue(ctx, w, op.falseExpr); err != nil {
+		return err
+	}
+	fmt.Fprint(w, `)`)
+	return nil
+}
+
+func (op *TernaryOp) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	return op.EmitExpr(ctx, w)
 }

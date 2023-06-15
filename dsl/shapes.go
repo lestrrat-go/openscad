@@ -26,6 +26,10 @@ func Cylinder(height, radius1, radius2 interface{}) *openscad.Cylinder {
 	return openscad.NewCylinder(height, radius1, radius2)
 }
 
+func Polyhedron(points, triangles interface{}) *openscad.Polyhedron {
+	return openscad.NewPolyhedron(points, triangles)
+}
+
 func Sphere(radius interface{}) *openscad.Sphere {
 	return openscad.NewSphere(radius)
 }
