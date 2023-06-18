@@ -13,6 +13,8 @@ var moduleKeyword = []byte(`module`)
 var functionKeyword = []byte(`function`)
 var forKeyword = []byte(`for`)
 var letKeyword = []byte(`let`)
+var includeKeyword = []byte(`include`)
+var useKeyword = []byte(`use`)
 
 const (
 	plus         = '+'
@@ -137,8 +139,10 @@ func Lex(ch chan *Token, src []byte) {
 	}
 	defer close(ch)
 
+	var inInclude bool
 	for len(l.src) > 0 {
 		// log.Printf("l.src = %q", l.src)
+		log.Printf("Lex loop (inInclude=%t)", inInclude)
 		l.skipWhiteSpaces()
 
 		found := true
@@ -195,6 +199,15 @@ func Lex(ch chan *Token, src []byte) {
 				l.advance()
 			}
 		case lessThan:
+			if inInclude {
+				l.unread()
+				if err := l.captureLiteral(lessThan, greaterThan); err != nil {
+					return
+				}
+				inInclude = false
+				continue
+			}
+
 			next := l.peek()
 			if next != equal {
 				l.unread()
@@ -224,6 +237,20 @@ func Lex(ch chan *Token, src []byte) {
 		// maybe it's one of the keywords...
 		found = true
 		switch peeked {
+		case 'i':
+			l.unread()
+			if err := l.expect(Keyword, includeKeyword); err == nil {
+				inInclude = true
+			} else {
+				found = false
+			}
+		case 'u':
+			l.unread()
+			if err := l.expect(Keyword, useKeyword); err == nil {
+				inInclude = true
+			} else {
+				found = false
+			}
 		case 'l':
 			l.unread()
 			if err := l.expect(Keyword, letKeyword); err != nil {
@@ -244,7 +271,7 @@ func Lex(ch chan *Token, src []byte) {
 			}
 		case dquote:
 			l.unread()
-			if err := l.captureLiteral(); err != nil {
+			if err := l.captureLiteral(dquote, dquote); err != nil {
 				found = false
 			}
 		case '-':
@@ -357,16 +384,16 @@ func (l *lexer) captureIdent() error {
 	return nil
 }
 
-func (l *lexer) captureLiteral() error {
+func (l *lexer) captureLiteral(begin, end rune) error {
 	l.skipWhiteSpaces()
 	var sb strings.Builder
 
-	if l.peek() != dquote {
-		return fmt.Errorf("expected double quote, but was not found")
+	if l.peek() != begin {
+		return fmt.Errorf("expected %q, but was not found", begin)
 	}
 	for len(l.src) > 0 {
 		r := l.peek()
-		if r == dquote {
+		if r == end {
 			break
 		}
 		sb.WriteRune(r)

@@ -12,6 +12,7 @@ import (
 func TestParser(t *testing.T) {
 	const src = `
 // Test code
+include <foo.scad>
 cm = 10;
 inch = 2.54 * cm; // one inch is 2.54 cm
 global_var = 1;

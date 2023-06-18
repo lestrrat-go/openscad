@@ -45,6 +45,20 @@ func (p *parser) handleStatements() (openscad.Stmts, error) {
 		switch tok.Type {
 		case Keyword:
 			switch tok.Value {
+			case "include":
+				p.Unread()
+				includeStmt, err := p.handleInclude()
+				if err != nil {
+					return nil, err
+				}
+				stmts = append(stmts, includeStmt)
+			case "use":
+				p.Unread()
+				useStmt, err := p.handleUse()
+				if err != nil {
+					return nil, err
+				}
+				stmts = append(stmts, useStmt)
 			case "let":
 				p.Unread()
 				letBlock, err := p.handleLetBlock()
@@ -957,4 +971,34 @@ func (p *parser) handleLetPreamble() ([]*openscad.Variable, error) {
 		p.Unread()
 	}
 	return letVars, nil
+}
+
+func (p *parser) handleInclude() (*openscad.Include, error) {
+	log.Printf("START include")
+	defer log.Printf("END include")
+	tok := p.Next()
+	if tok.Type != Keyword || tok.Value != "include" {
+		return nil, fmt.Errorf(`expected include, got %q`, tok.Value)
+	}
+
+	tok = p.Next()
+	if tok.Type != Literal {
+		return nil, fmt.Errorf(`expected string, got %q`, tok.Value)
+	}
+
+	return dsl.Include(tok.Value), nil
+}
+
+func (p *parser) handleUse() (*openscad.Use, error) {
+	tok := p.Next()
+	if tok.Type != Keyword || tok.Value != "use" {
+		return nil, fmt.Errorf(`expected use, got %q`, tok.Value)
+	}
+
+	tok = p.Next()
+	if tok.Type != Literal {
+		return nil, fmt.Errorf(`expected string, got %q`, tok.Value)
+	}
+
+	return dsl.Use(tok.Value), nil
 }
