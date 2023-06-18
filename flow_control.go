@@ -196,15 +196,15 @@ func NewTernaryOp(condition, trueExpr, falseExpr interface{}) *TernaryOp {
 func (op *TernaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	ctx = ctx.WithAllowAssignment(false)
 	fmt.Fprint(w, `(`)
-	if err := emitValue(ctx, w, op.condition); err != nil {
+	if err := emitExpr(ctx, w, op.condition); err != nil {
 		return err
 	}
 	fmt.Fprint(w, `?`)
-	if err := emitValue(ctx, w, op.trueExpr); err != nil {
+	if err := emitExpr(ctx, w, op.trueExpr); err != nil {
 		return err
 	}
 	fmt.Fprint(w, `:`)
-	if err := emitValue(ctx, w, op.falseExpr); err != nil {
+	if err := emitExpr(ctx, w, op.falseExpr); err != nil {
 		return err
 	}
 	fmt.Fprint(w, `)`)
@@ -212,5 +212,10 @@ func (op *TernaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 }
 
 func (op *TernaryOp) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	return op.EmitExpr(ctx, w)
+	fmt.Fprint(w, ctx.Indent())
+	if err := op.EmitExpr(ctx, w); err != nil {
+		return err
+	}
+	fmt.Fprint(w, `;`)
+	return nil
 }

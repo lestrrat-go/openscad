@@ -165,6 +165,10 @@ func AddIndent(ctx context.Context) context.Context {
 // Stmts is a sequence of statements.
 type Stmts []Stmt
 
+func (stmts *Stmts) Add(stmt Stmt) {
+	*stmts = append(*stmts, stmt)
+}
+
 func (stmts Stmts) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	ctx = ctx.WithAllowAssignment(true)
 	for i, stmt := range stmts {
@@ -298,6 +302,11 @@ func (m *Module) Actions(children ...Stmt) *Module {
 	return m
 }
 
+func (m *Module) Add(child Stmt) *Module {
+	m.children = append(m.children, child)
+	return m
+}
+
 func (m *Module) Body(children ...Stmt) *Module {
 	m.children = make([]Stmt, len(children))
 	copy(m.children, children)
@@ -369,7 +378,7 @@ func (c *Call) EmitStmt(ctx *EmitContext, w io.Writer) error {
 func (c *Call) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, `%s(`, c.name)
 
-	ctx = ctx.WithAllowAssignment(false)
+	ctx = ctx.WithAllowAssignment(true)
 	for i, p := range c.parameters {
 		if i > 0 {
 			fmt.Fprintf(w, `, `)
@@ -470,5 +479,14 @@ func (i *Index) EmitExpr(ctx *EmitContext, w io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(w, "]")
+	return nil
+}
+
+type CommentLine struct {
+	comment string
+}
+
+func (c *CommentLine) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, `%s// %s`, ctx.Indent(), c.comment)
 	return nil
 }

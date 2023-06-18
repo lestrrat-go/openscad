@@ -5,6 +5,25 @@ import (
 	"io"
 )
 
+type Group struct {
+	expr interface{}
+}
+
+func NewGroup(expr interface{}) *Group {
+	return &Group{
+		expr: expr,
+	}
+}
+
+func (g *Group) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprint(w, `(`)
+	if err := emitExpr(ctx, w, g.expr); err != nil {
+		return err
+	}
+	fmt.Fprint(w, `)`)
+	return nil
+}
+
 type UnaryOp struct {
 	op   string
 	expr interface{}
@@ -37,6 +56,18 @@ func NewBinaryOp(op string, left, right interface{}) *BinaryOp {
 		left:  left,
 		right: right,
 	}
+}
+
+func (op *BinaryOp) Op() string {
+	return op.op
+}
+
+func (op *BinaryOp) Right() interface{} {
+	return op.right
+}
+
+func (op *BinaryOp) Left() interface{} {
+	return op.left
 }
 
 func (op *BinaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {

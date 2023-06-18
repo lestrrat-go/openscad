@@ -94,7 +94,8 @@ func Emit(stmt Stmt, w io.Writer, options ...EmitOption) error {
 		case optRegistryKey{}:
 			ctx.registry = option.Value().(*Registry)
 		}
-	
+	}
+
 	return stmt.EmitStmt(ctx, w)
 }
 

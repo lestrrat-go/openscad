@@ -21,7 +21,7 @@ func Example() {
 			Parameters(width).
 			Actions(
 				dsl.Rotate(
-					0, 180, 0,
+					dsl.List(0, 180, 0),
 					dsl.Translate(
 						dsl.List(10, 10, 10),
 						dsl.Cube(width, 40, 5).Fn(24),

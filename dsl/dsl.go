@@ -44,6 +44,10 @@ func Function(name string) *openscad.Function {
 	return openscad.NewFunction(name)
 }
 
+func Group(expr interface{}) *openscad.Group {
+	return openscad.NewGroup(expr)
+}
+
 func Include(name string) *openscad.Include {
 	return openscad.NewInclude(name)
 }
