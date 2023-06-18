@@ -11,6 +11,8 @@ import (
 
 var moduleKeyword = []byte(`module`)
 var functionKeyword = []byte(`function`)
+var forKeyword = []byte(`for`)
+var letKeyword = []byte(`let`)
 
 const (
 	plus         = '+'
@@ -31,6 +33,7 @@ const (
 	lessThan     = '<'
 	greaterThan  = '>'
 	question     = '?'
+	percent      = '%'
 )
 const (
 	EOF = iota
@@ -59,6 +62,7 @@ const (
 	CloseBracket // ]
 	OpenBrace    // {
 	CloseBrace   // }
+	Percent
 )
 
 type Token struct {
@@ -134,7 +138,7 @@ func Lex(ch chan *Token, src []byte) {
 	defer close(ch)
 
 	for len(l.src) > 0 {
-		log.Printf("l.src = %q", l.src)
+		// log.Printf("l.src = %q", l.src)
 		l.skipWhiteSpaces()
 
 		found := true
@@ -208,6 +212,8 @@ func Lex(ch chan *Token, src []byte) {
 				l.advance()
 				l.emitBuffer(GreaterThanEqual)
 			}
+		case percent:
+			l.emitBuffer(Percent)
 		default:
 			found = false
 		}
@@ -218,6 +224,11 @@ func Lex(ch chan *Token, src []byte) {
 		// maybe it's one of the keywords...
 		found = true
 		switch peeked {
+		case 'l':
+			l.unread()
+			if err := l.expect(Keyword, letKeyword); err != nil {
+				found = false
+			}
 		case 'm':
 			l.unread()
 			if err := l.expect(Keyword, moduleKeyword); err != nil {
@@ -226,8 +237,10 @@ func Lex(ch chan *Token, src []byte) {
 			}
 		case 'f':
 			l.unread()
-			if err := l.expect(Keyword, functionKeyword); err != nil {
-				found = false
+			if err := l.expect(Keyword, forKeyword); err != nil {
+				if err := l.expect(Keyword, functionKeyword); err != nil {
+					found = false
+				}
 			}
 		case dquote:
 			l.unread()
@@ -264,7 +277,7 @@ func (l *lexer) peekExpect(typ int, v []byte) bool {
 
 func (l *lexer) expect(typ int, v []byte) error {
 	l.skipWhiteSpaces()
-	log.Printf("expect %q, l.src= %q", v, l.src[l.pos:])
+	//log.Printf("expect %q, l.src= %q", v, l.src[l.pos:])
 	if !bytes.Equal(v, l.src[l.pos:len(v)]) {
 		return fmt.Errorf("expected %q, but was not foud", v)
 	}
@@ -320,9 +333,19 @@ func (l *lexer) captureIdent() error {
 	var sb strings.Builder
 	for len(l.src) > 0 {
 		r := l.peek()
-		if r != '_' && !unicode.IsLetter(r) && !unicode.IsNumber(r) {
-			l.unread()
-			break
+
+		// We need to allow $ in the first character because it's used in the
+		// special variables like $fn
+		if sb.Len() > 0 {
+			if r != '_' && !unicode.IsLetter(r) && !unicode.IsNumber(r) {
+				l.unread()
+				break
+			}
+		} else {
+			if r != '$' && r != '_' && !unicode.IsLetter(r) && !unicode.IsNumber(r) {
+				l.unread()
+				break
+			}
 		}
 		l.advance()
 		sb.WriteRune(r)

@@ -303,7 +303,7 @@ func toothWidthFunc() openscad.Stmt {
 			toothHeight,
 			dsl.Variable("extent"),
 		).Body(
-		dsl.Let(
+		dsl.LetBlock(
 			angFull,
 			angPn,
 		).Body(

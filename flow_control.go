@@ -5,36 +5,10 @@ import (
 	"io"
 )
 
-// Let is a statement that declares a variable and assigns it a value.
-//
-// It's a little clunky to use from Go, but you usually do not need to
-// use this from Go (because you could directly insert values from Go
-// instead of using OpenSCAD variables), so it's not really a priority for us.
-type Let struct {
-	variables []*Variable
-	children  []Stmt
-}
-
-func NewLet(variables ...*Variable) *Let {
-	return &Let{
-		variables: variables,
-	}
-}
-
-func (l *Let) Body(children ...Stmt) *Let {
-	l.children = make([]Stmt, len(children))
-	copy(l.children, children)
-	return l
-}
-
-func (l *Let) Add(stmt ...Stmt) *Let {
-	l.children = append(l.children, stmt...)
-	return l
-}
-
-func (l *Let) EmitExpr(ctx *EmitContext, w io.Writer) error {
+func emitLetPreamble(ctx *EmitContext, w io.Writer, vars []*Variable) error {
 	fmt.Fprintf(w, `%slet(`, ctx.Indent())
-	for i, v := range l.variables {
+	ctx = ctx.WithAllowAssignment(true)
+	for i, v := range vars {
 		if i > 0 {
 			fmt.Fprintf(w, `, `)
 		}
@@ -43,6 +17,62 @@ func (l *Let) EmitExpr(ctx *EmitContext, w io.Writer) error {
 		}
 	}
 	fmt.Fprintf(w, `)`)
+	return nil
+}
+
+type LetExpr struct {
+	variables []*Variable
+	expr      interface{}
+}
+
+func NewLetExpr(variables ...*Variable) *LetExpr {
+	return &LetExpr{
+		variables: variables,
+	}
+}
+
+func (l *LetExpr) Expr(expr interface{}) *LetExpr {
+	l.expr = expr
+	return l
+}
+
+func (l *LetExpr) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	if err := emitLetPreamble(ctx, w, l.variables); err != nil {
+		return err
+	}
+
+	if err := emitExpr(ctx, w, l.expr); err != nil {
+		return err
+	}
+	return nil
+}
+
+type LetBlock struct {
+	variables []*Variable
+	children  []Stmt
+}
+
+func NewLetBlock(variables ...*Variable) *LetBlock {
+	return &LetBlock{
+		variables: variables,
+	}
+}
+
+func (l *LetBlock) Body(children ...Stmt) *LetBlock {
+	l.children = make([]Stmt, len(children))
+	copy(l.children, children)
+	return l
+}
+
+func (l *LetBlock) Add(stmt ...Stmt) *LetBlock {
+	l.children = append(l.children, stmt...)
+	return l
+}
+
+func (l *LetBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	if err := emitLetPreamble(ctx, w, l.variables); err != nil {
+		return err
+	}
 	emitChildren(ctx, w, l.children)
 	return nil
 }
@@ -173,9 +203,7 @@ func (f *ForBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if err := emitForDecl(ctx, w, f.loopVars); err != nil {
 		return err
 	}
-	fmt.Fprint(w, `{`)
 	emitChildren(ctx, w, f.children)
-	fmt.Fprintf(w, "\n%s}", indent)
 	return nil
 }
 
@@ -193,17 +221,29 @@ func NewTernaryOp(condition, trueExpr, falseExpr interface{}) *TernaryOp {
 	}
 }
 
+func (op *TernaryOp) Condition() interface{} {
+	return op.condition
+}
+
+func (op *TernaryOp) TrueExpr() interface{} {
+	return op.trueExpr
+}
+
+func (op *TernaryOp) FalseExpr() interface{} {
+	return op.falseExpr
+}
+
 func (op *TernaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	ctx = ctx.WithAllowAssignment(false)
 	fmt.Fprint(w, `(`)
 	if err := emitExpr(ctx, w, op.condition); err != nil {
 		return err
 	}
-	fmt.Fprint(w, `?`)
+	fmt.Fprint(w, ` ? `)
 	if err := emitExpr(ctx, w, op.trueExpr); err != nil {
 		return err
 	}
-	fmt.Fprint(w, `:`)
+	fmt.Fprint(w, ` : `)
 	if err := emitExpr(ctx, w, op.falseExpr); err != nil {
 		return err
 	}

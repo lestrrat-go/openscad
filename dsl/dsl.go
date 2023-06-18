@@ -60,8 +60,12 @@ func Len(v interface{}) *openscad.Len {
 	return openscad.NewLen(v)
 }
 
-func Let(vars ...*openscad.Variable) *openscad.Let {
-	return openscad.NewLet(vars...)
+func LetBlock(vars ...*openscad.Variable) *openscad.LetBlock {
+	return openscad.NewLetBlock(vars...)
+}
+
+func LetExpr(vars ...*openscad.Variable) *openscad.LetExpr {
+	return openscad.NewLetExpr(vars...)
 }
 
 func List(values ...interface{}) []interface{} {

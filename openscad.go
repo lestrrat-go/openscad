@@ -481,12 +481,3 @@ func (i *Index) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, "]")
 	return nil
 }
-
-type CommentLine struct {
-	comment string
-}
-
-func (c *CommentLine) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprintf(w, `%s// %s`, ctx.Indent(), c.comment)
-	return nil
-}

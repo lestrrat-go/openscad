@@ -17,6 +17,10 @@ func NewFunction(name string) *Function {
 	}
 }
 
+func (f *Function) Name() string {
+	return f.name
+}
+
 func (f *Function) Parameters(params ...*Variable) *Function {
 	f.parameters = append(f.parameters, params...)
 	return f

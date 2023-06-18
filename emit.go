@@ -74,6 +74,14 @@ func WriteFile(filename string, options ...WriteFileOption) error {
 	return nil
 }
 
+func EmitString(stmt Stmt, options ...EmitOption) (string, error) {
+	var buf bytes.Buffer
+	if err := Emit(stmt, &buf, options...); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
 // Emit takes a statement (or a list of statements) and emits them
 // into the writer.
 //

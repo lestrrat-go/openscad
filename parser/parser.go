@@ -10,27 +10,9 @@ import (
 )
 
 type parser struct {
-	ch     chan *Token
-	parent interface{}
-
+	ch      chan *Token
 	peeked  []*Token
 	readPos int
-}
-
-func (p *parser) addChild(child interface{}) {
-	log.Printf("addChild: %#v", child)
-	switch parent := p.parent.(type) {
-	case openscad.Stmts:
-		parent.Add(child.(openscad.Stmt))
-		p.parent = parent
-	case *openscad.Module:
-		log.Printf("adding child to module")
-		parent.Add(child.(openscad.Stmt))
-	case *openscad.Call:
-		parent.Add(child.(openscad.Stmt))
-	default:
-		panic(fmt.Errorf(`unknown parent type: %T`, parent))
-	}
 }
 
 func Parse(src []byte) (openscad.Stmts, error) {
@@ -38,21 +20,19 @@ func Parse(src []byte) (openscad.Stmts, error) {
 
 	go Lex(ch, src)
 
-	stmts := dsl.Stmts([]openscad.Stmt{}...)
-	log.Printf("stmts -> %p", stmts)
 	p := &parser{
 		ch:      ch,
-		parent:  stmts,
 		readPos: -1,
 	}
-	if err := p.handleStatements(); err != nil {
+	stmts, err := p.handleStatements()
+	if err != nil {
 		return nil, fmt.Errorf(`failed to parse: %w`, err)
 	}
-	log.Printf("p.parent -> %p", p.parent)
-	return p.parent.(openscad.Stmts), nil
+	return stmts, nil
 }
 
-func (p *parser) handleStatements() error {
+func (p *parser) handleStatements() (openscad.Stmts, error) {
+	var stmts openscad.Stmts
 	for {
 		log.Printf("new loop in handle any")
 		tok := p.Peek()
@@ -60,61 +40,65 @@ func (p *parser) handleStatements() error {
 		switch tok.Type {
 		case Keyword:
 			switch tok.Value {
+			case "let":
+				p.Unread()
+				letBlock, err := p.handleLetBlock()
+				if err != nil {
+					return nil, err
+				}
+				stmts = append(stmts, letBlock)
 			case "module":
 				p.Unread()
 				module, err := p.handleModule()
 				if err != nil {
-					return err
+					return nil, err
 				}
-				p.addChild(module)
-				log.Printf("returned from handleModule")
+				stmts = append(stmts, module)
 			case "function":
 				p.Unread()
 				fn, err := p.handleFunction()
 				if err != nil {
-					return err
+					return nil, err
 				}
 				tok = p.Next()
 				if tok.Type != Semicolon {
-					return fmt.Errorf(`expected semicolon after function declaration, got %q`, tok.Value)
+					return nil, fmt.Errorf(`expected semicolon after function declaration for %q, got %q`, fn.Name(), tok.Value)
 				}
-				p.addChild(fn)
+				stmts = append(stmts, fn)
+			case "for":
+				p.Unread()
+				block, err := p.handleForBlock()
+				if err != nil {
+					return nil, err
+				}
+				stmts = append(stmts, block)
 			default:
-				return fmt.Errorf(`unknown keyword %q`, tok.Value)
+				return nil, fmt.Errorf(`unknown keyword %q`, tok.Value)
 			}
 		case Ident:
 			p.Unread()
 			stmt, semicolon, err := p.handleAssignmentOrFunctionCall()
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if semicolon {
 				tok = p.Next()
 				if tok.Type != Semicolon {
-					return fmt.Errorf(`expected semicolon after assignment or function call, got %q`, tok.Value)
+					log.Printf("%#v", stmt)
+					return nil, fmt.Errorf(`expected semicolon after assignment or function call, got %q`, tok.Value)
 				}
 			}
-			p.addChild(stmt)
+			stmts = append(stmts, stmt)
 		case CloseBrace:
 			p.Unread()
-			return nil
+			return stmts, nil
 		case EOF:
-			return nil
+			return stmts, nil
 		default:
-			p.Unread()
-			stmt, err := p.handleExpr()
-			if err != nil {
-				return fmt.Errorf(`failed to parse expr in statements: %w:`, err)
-			}
-			tok = p.Next()
-			if tok.Type != Semicolon {
-				return fmt.Errorf(`expected semicolon after statement, got %q`, tok.Value)
-			}
-			p.addChild(stmt)
+			return nil, fmt.Errorf(`unhandled token %q`, tok.Value)
 		}
 	}
-	return nil
 }
 
 // Peek obtains the next token, but retains it in a buffer so that we can backtrack it.
@@ -178,20 +162,18 @@ func (p *parser) handleModule() (*openscad.Module, error) {
 	moduleName := tok.Value
 	module := dsl.Module(moduleName)
 
-	parent := p.parent
-	p.parent = module
-	defer func() { p.parent = parent }()
-
 	params, err := p.handleParameterList()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse parameter list for module %q: %w`, moduleName, err)
 	}
 
-	if err := p.handleBlock(); err != nil {
+	stmts, err := p.handleBlock()
+	if err != nil {
 		return nil, fmt.Errorf(`failed to parse block for module %q: %w`, moduleName, err)
 	}
 
 	module.Parameters(params...)
+	module.Body(stmts...)
 	return module, nil
 }
 
@@ -205,78 +187,78 @@ func (p *parser) handleParameterList() ([]*openscad.Variable, error) {
 
 	var ret []*openscad.Variable
 
-	// "best" case, there are no arguments
-	tok = p.Peek()
-	if tok.Type == CloseParen {
-		p.Advance()
-		return nil, nil
-	}
-	p.Unread()
-
-	// There are arguments!
-	for {
-		// ident or literal
-		tok = p.Next()
-		switch tok.Type {
-		case Ident:
-			ident := tok.Value
-			v := dsl.Variable(ident)
-			ret = append(ret, v)
-			// There could be a default value
-
-			log.Printf("param: %q", ident)
-			tok = p.Peek()
-			switch tok.Type {
-			case Equal:
-				p.Advance()
-				tok = p.Next()
-				if tok.Type == Literal {
-					v.Value(tok.Value)
-				}
-			default:
-				p.Unread()
-			}
+OUTER:
+	for count := 1; ; count++ {
+		tok = p.Peek()
+		if tok.Type == CloseParen {
+			p.Advance()
+			break OUTER
 		}
+		p.Unread()
+
+		v, err := p.handleParamDecl()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse parameter %d: %w`, count, err)
+		}
+		ret = append(ret, v)
 
 		// if we see a comma, then we expect more
 		tok = p.Peek()
 		if tok.Type == Comma {
-			p.Advance()
 			continue
 		}
 		p.Unread()
-
-		// otherwise, it better be a close paren
-		tok = p.Next()
-		if tok.Type != CloseParen {
-			return nil, fmt.Errorf(`expected close paren, got %q`, tok.Value)
-		}
-		break
 	}
 	return ret, nil
 }
 
-func (p *parser) handleBlock() error {
+func (p *parser) handleParamDecl() (*openscad.Variable, error) {
+	log.Printf("START param decl")
+	defer log.Printf("END param decl")
+	tok := p.Next()
+	if tok.Type != Ident {
+		return nil, fmt.Errorf(`expected ident for param decl, got %q`, tok.Value)
+	}
+
+	name := tok.Value
+
+	v := dsl.Variable(name)
+
+	tok = p.Peek()
+	if tok.Type != Equal {
+		p.Unread()
+	} else {
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse expr for param decl: %w`, err)
+		}
+		v.Value(expr)
+	}
+	return v, nil
+}
+
+func (p *parser) handleBlock() (openscad.Stmts, error) {
 	log.Printf("START block")
 	defer log.Printf("END block")
 	tok := p.Next()
 	if tok.Type != OpenBrace {
-		return fmt.Errorf(`expected open brace, got %q`, tok.Value)
+		return nil, fmt.Errorf(`expected open brace, got %q`, tok.Value)
 	}
 
-	if err := p.handleStatements(); err != nil {
-		return fmt.Errorf(`failed to parse block: %w`, err)
+	stmts, err := p.handleStatements()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse block: %w`, err)
 	}
 
 	tok = p.Next()
 	if tok.Type != CloseBrace {
-		return fmt.Errorf(`expected close brace, got %q`, tok.Value)
+		return nil, fmt.Errorf(`expected close brace, got %q`, tok.Value)
 	}
 	log.Printf("consumed close brace")
-	return nil
+	return stmts, nil
 }
 
-func (p *parser) handleAssignment() (openscad.Stmt, error) {
+func (p *parser) handleAssignment() (*openscad.Variable, error) {
 	log.Printf("START assignment")
 	defer log.Printf("END assignment")
 	tok := p.Next()
@@ -352,13 +334,11 @@ OUTER:
 	switch tok.Type {
 	case OpenBrace:
 		p.Unread()
-		parent := p.parent
-		p.parent = call
-		err := p.handleBlock()
-		p.parent = parent
+		stmts, err := p.handleBlock()
 		if err != nil {
 			return nil, false, fmt.Errorf(`failed to parse block: %w`, err)
 		}
+		call.Add(stmts...)
 		semicolon = false
 	case Ident:
 		// This should be a function call
@@ -379,9 +359,11 @@ OUTER:
 	return call, semicolon, nil
 }
 
-func (p *parser) handleParenExpr() (interface{}, error) {
+func (p *parser) handleParenExpr() (ret interface{}, reterr error) {
 	log.Printf("START parenexpr")
-	defer log.Printf("END parenexpr")
+	defer func(reterr *error) {
+		log.Printf("END parenexpr: %#v", *reterr)
+	}(&reterr)
 	tok := p.Next()
 	if tok.Type != OpenParen {
 		return nil, fmt.Errorf(`expected open paren, got %q`, tok.Value)
@@ -394,19 +376,39 @@ func (p *parser) handleParenExpr() (interface{}, error) {
 
 	tok = p.Next()
 	if tok.Type != CloseParen {
-		return nil, fmt.Errorf(`expected close paren, got %q`, tok.Value)
+		return nil, fmt.Errorf(`expected close paren, got %#v`, tok)
 	}
 	return dsl.Group(expr), nil
 }
 
-func (p *parser) handleExpr() (interface{}, error) {
+func (p *parser) handleExpr() (ret interface{}, reterr error) {
 	log.Printf("START expr")
-	defer log.Printf("END expr")
+	defer func(ret *interface{}) {
+		log.Printf("END expr %#v", *ret)
+	}(&ret)
 
 	var expr interface{}
 
 	tok := p.Next()
 	switch tok.Type {
+	case Keyword:
+		p.Unread()
+		switch tok.Value {
+		case "let":
+			ve, err := p.handleLetExpr()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse let expression: %w`, err)
+			}
+			expr = ve
+		case "for":
+			fe, err := p.handleForExpr()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse for expression: %w`, err)
+			}
+			expr = fe
+		default:
+			return nil, fmt.Errorf(`unexpected keyword %q`, tok.Value)
+		}
 	case OpenParen:
 		p.Unread()
 		pe, err := p.handleParenExpr()
@@ -414,6 +416,13 @@ func (p *parser) handleExpr() (interface{}, error) {
 			return nil, fmt.Errorf(`failed to parse parenthesized expression: %w`, err)
 		}
 		expr = pe
+	case Minus:
+		// This is a unary minus
+		operand, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse expression: %w`, err)
+		}
+		expr = dsl.Negative(operand)
 	case Literal:
 		expr = tok.Value
 	case Numeric:
@@ -422,7 +431,6 @@ func (p *parser) handleExpr() (interface{}, error) {
 			return nil, fmt.Errorf(`failed to parse numeric literal %q: %w`, tok.Value, err)
 		}
 		expr = f
-
 	case Ident:
 		p.Unread()
 		// could be a function call, or just a variable
@@ -433,7 +441,7 @@ func (p *parser) handleExpr() (interface{}, error) {
 			expr = dsl.Variable(tok.Value)
 		}
 	case OpenBracket:
-		// This is a list
+		// This is a list or a loop range
 		p.Unread()
 		list, err := p.handleList()
 		if err != nil {
@@ -448,6 +456,9 @@ func (p *parser) handleExpr() (interface{}, error) {
 		expr = op
 	}
 
+	if expr == nil {
+		panic(`nil expr!`)
+	}
 	return expr, nil
 }
 
@@ -508,6 +519,8 @@ func (p *parser) handleAssignmentOrFunctionCall() (openscad.Stmt, bool, error) {
 }
 
 func (p *parser) handleList() ([]interface{}, error) {
+	log.Printf("START list")
+	defer log.Printf("END list")
 	tok := p.Next()
 	if tok.Type != OpenBracket {
 		return nil, fmt.Errorf(`expected open bracket, got %q`, tok.Value)
@@ -610,79 +623,333 @@ func (p *parser) handleFunction() (*openscad.Function, error) {
 	return fn, nil
 }
 
-func (p *parser) mungeNumericOperatorPrecedence(expr interface{}) interface{} {
+func (p *parser) mungeOperatorPrecedence(expr interface{}) interface{} {
 	bop, ok := expr.(*openscad.BinaryOp)
 	if !ok {
 		return expr
 	}
 
-	var parentop func(interface{}, interface{}) *openscad.BinaryOp
-	switch bop.Op() {
-	case "*":
-		parentop = dsl.Mul
-	case "/":
-		parentop = dsl.Div
+	switch rop := bop.Right().(type) {
+	case *openscad.BinaryOp:
+		return bop.Rearrange(rop)
+	case *openscad.TernaryOp:
+		// Take the condition of the ternary op, and make it the right hand side
+		return openscad.NewTernaryOp(
+			openscad.NewBinaryOp(bop.Op(), bop.Left(), rop.Condition()),
+			rop.TrueExpr(),
+			rop.FalseExpr(),
+		)
 	default:
 		return expr
 	}
 
-	rop, ok := bop.Right().(*openscad.BinaryOp)
-	if !ok {
-		return expr
-	}
-
-	switch rop.Op() {
-	case "+":
-		return dsl.Add(parentop(bop.Left(), rop.Left()), rop.Right())
-	case "-":
-		return dsl.Sub(parentop(bop.Left(), rop.Left()), rop.Right())
-	}
-	return expr
 }
 
 func (p *parser) tryOperator(left interface{}) (interface{}, error) {
-	log.Printf("START tryOperator")
-	defer log.Printf("END tryOperator")
 	tok := p.Peek()
-	log.Printf("%#v", tok)
+	var ret interface{}
 	switch tok.Type {
 	case Question:
 		p.Unread()
-		return p.handleTernary(left)
+		ternary, err := p.handleTernary(left)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse ternary expression: %w`, err)
+		}
+		ret = ternary
 	case Equality:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '==': %w`, err)
 		}
-		return dsl.EQ(left, expr), nil
+		ret = dsl.EQ(left, expr)
+	case LessThan:
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse right hand expression of '<': %w`, err)
+		}
+		ret = dsl.LT(left, expr)
+	case LessThanEqual:
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse right hand expression of '<=': %w`, err)
+		}
+		ret = dsl.LE(left, expr)
+	case GreaterThan:
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse right hand expression of '>': %w`, err)
+		}
+		ret = dsl.GT(left, expr)
+	case GreaterThanEqual:
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse right hand expression of '>=': %w`, err)
+		}
+		ret = dsl.GE(left, expr)
 	case Asterisk:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '*': %w`, err)
 		}
 
-		return p.mungeNumericOperatorPrecedence(dsl.Mul(left, expr)), nil
+		ret = dsl.Mul(left, expr)
 	case Slash:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '/': %w`, err)
 		}
-		return p.mungeNumericOperatorPrecedence(dsl.Div(left, expr)), nil
+		ret = dsl.Div(left, expr)
 	case Plus:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '+': %w`, err)
 		}
-		return dsl.Add(left, expr), nil
+		ret = dsl.Add(left, expr)
 	case Minus:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '-': %w`, err)
 		}
-		return dsl.Sub(left, expr), nil
+		ret = dsl.Sub(left, expr)
+	case Percent:
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse right hand expression of '%%': %w`, err)
+		}
+		ret = dsl.Mod(left, expr)
+	case OpenBracket:
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse index expression of '[]': %w`, err)
+		}
+
+		tok = p.Peek()
+		if tok.Type != CloseBracket {
+			return nil, fmt.Errorf(`expected close bracket, got %q`, tok.Value)
+		}
+		p.Advance()
+
+		// Only in this instance, we need to further, because we may
+		// have a list[expr] followed by another operator
+		expr2, err := p.tryOperator(dsl.Index(left, expr))
+		if err != nil {
+			return nil, err
+		}
+		ret = expr2
 	default:
 		log.Printf("not an operator %#v", tok)
 		p.Unread()
-		return nil, nil
+		return left, nil
 	}
+
+	return p.mungeOperatorPrecedence(ret), nil
+}
+
+func (p *parser) handleForExpr() (*openscad.ForExpr, error) {
+	loopVars, err := p.handleForPreamble()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse for loop preamble: %w`, err)
+	}
+
+	forExpr := dsl.ForExpr(loopVars...)
+	expr, err := p.handleExpr()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse for expression: %w`, err)
+	}
+	forExpr.Body(expr)
+	return forExpr, nil
+}
+
+func (p *parser) handleForBlock() (*openscad.ForBlock, error) {
+	loopVars, err := p.handleForPreamble()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse for loop preamble: %w`, err)
+	}
+
+	forStmt := dsl.For(loopVars...)
+	stmts, err := p.handleBlock()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse for block: %w`, err)
+	}
+	forStmt.Body(stmts...)
+
+	return forStmt, nil
+}
+
+func (p *parser) handleForPreamble() ([]*openscad.LoopVar, error) {
+	tok := p.Next()
+	if tok.Type != Keyword || tok.Value != "for" {
+		return nil, fmt.Errorf(`expected for, got %q`, tok.Value)
+	}
+
+	tok = p.Next()
+	if tok.Type != OpenParen {
+		return nil, fmt.Errorf(`expected open paren, got %q`, tok.Value)
+	}
+
+	// Multiple for variables can be specified, such as
+	// for (i=[0:1], j=foobar(), z=[1, 2, 3])
+	var loopVars []*openscad.LoopVar
+	for {
+		tok = p.Peek()
+		if tok.Type == CloseParen {
+			break
+		}
+		p.Unread()
+
+		variable, err := p.handleForLoopVariable()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse for loop variable: %w`, err)
+		}
+
+		loopVars = append(loopVars, variable)
+
+		tok = p.Peek()
+		if tok.Type == Comma {
+			continue
+		}
+		p.Unread()
+	}
+	return loopVars, nil
+}
+
+func (p *parser) handleForRange() (*openscad.ForRange, error) {
+	log.Printf("START handleForRange")
+	defer log.Printf("END handleForRange")
+	tok := p.Next()
+	if tok.Type != OpenBracket {
+		return nil, fmt.Errorf(`expected open bracket, got %q`, tok.Value)
+	}
+
+	initExpr, err := p.handleExpr()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse first element for range expression: %w`, err)
+	}
+
+	tok = p.Next()
+	if tok.Type != Colon {
+		return nil, fmt.Errorf(`expected colon, got %q`, tok.Value)
+	}
+
+	endExpr, err := p.handleExpr()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse second element for range expression: %w`, err)
+	}
+
+	var stepExpr interface{}
+	tok = p.Peek()
+	if tok.Type != Colon {
+		p.Unread()
+	} else {
+		// we have a three element range expression
+		endExpr = stepExpr
+		stepExpr, err = p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse 'end' element for range expression: %w`, err)
+		}
+	}
+
+	tok = p.Next()
+	if tok.Type != CloseBracket {
+		return nil, fmt.Errorf(`expected close bracket, got %q`, tok.Value)
+	}
+
+	fr := dsl.ForRange(initExpr, endExpr)
+	if stepExpr != nil {
+		fr.Increment(stepExpr)
+	}
+	return fr, nil
+}
+
+func (p *parser) handleForLoopVariable() (*openscad.LoopVar, error) {
+	tok := p.Next()
+	if tok.Type != Ident {
+		return nil, fmt.Errorf(`expected loop variable identifier, got %q`, tok.Value)
+	}
+
+	variable := dsl.Variable(tok.Value)
+
+	tok = p.Next()
+	if tok.Type != Equal {
+		return nil, fmt.Errorf(`expected equals, got %q`, tok.Value)
+	}
+
+	// First, try a for range expression, if that fails, try expr
+	var frexpr interface{}
+	fr, err := p.handleForRange()
+	if err == nil {
+		frexpr = fr
+	} else {
+		log.Printf("failed for range: %s", err)
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse for loop variable expression: %w`, err)
+		}
+		frexpr = expr
+	}
+	return dsl.LoopVar(variable, frexpr), nil
+}
+
+func (p *parser) handleLetExpr() (*openscad.LetExpr, error) {
+	vars, err := p.handleLetPreamble()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse let preamble: %w`, err)
+	}
+	letExpr := dsl.LetExpr(vars...)
+	expr, err := p.handleExpr()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse let expression: %w`, err)
+	}
+	letExpr.Expr(expr)
+	return letExpr, nil
+}
+
+func (p *parser) handleLetBlock() (*openscad.LetBlock, error) {
+	vars, err := p.handleLetPreamble()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse let preamble: %w`, err)
+	}
+	letBlock := dsl.LetBlock(vars...)
+	stmts, err := p.handleBlock()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse let block: %w`, err)
+	}
+	letBlock.Add(stmts...)
+	return letBlock, nil
+}
+
+func (p *parser) handleLetPreamble() ([]*openscad.Variable, error) {
+	tok := p.Next()
+	if tok.Type != Keyword || tok.Value != "let" {
+		return nil, fmt.Errorf(`expected let, got %q`, tok.Value)
+	}
+
+	tok = p.Next()
+	if tok.Type != OpenParen {
+		return nil, fmt.Errorf(`expected open paren, got %q`, tok.Value)
+	}
+
+	// Multiple variables can be declared
+	var letVars []*openscad.Variable
+	for {
+		tok = p.Peek()
+		if tok.Type == CloseParen {
+			break
+		}
+		p.Unread()
+
+		variable, err := p.handleAssignment()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse let variable: %w`, err)
+		}
+
+		letVars = append(letVars, variable)
+
+		tok = p.Peek()
+		if tok.Type == Comma {
+			continue
+		}
+		p.Unread()
+	}
+	return letVars, nil
 }

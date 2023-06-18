@@ -2,6 +2,7 @@ package openscad_test
 
 import (
 	"os"
+	"testing"
 
 	"github.com/lestrrat-go/openscad"
 	"github.com/lestrrat-go/openscad/dsl"
@@ -67,4 +68,12 @@ func ExampleBezier2D() {
 	)
 
 	openscad.Emit(stmts, os.Stdout)
+}
+
+func TestOperatorPrecedence(t *testing.T) {
+	right := dsl.Add(3, 4)
+	left := dsl.Mul(2, right)
+
+	t.Logf("%t", left.BindPrecedence() > right.BindPrecedence())
+	t.Logf("%#v", left.Rearrange(right))
 }
