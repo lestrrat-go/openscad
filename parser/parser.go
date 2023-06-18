@@ -15,6 +15,11 @@ type parser struct {
 	readPos int
 }
 
+// Parse parses an OpenSCAD source code, and turns it into an internal
+// representation that can be used to output the same source code
+// afterwrads, programmatically.
+//
+// Currently comments are out of scope of this implementation.
 func Parse(src []byte) (openscad.Stmts, error) {
 	ch := make(chan *Token, 1)
 
