@@ -1,46 +1,56 @@
 openscad
 ========
 
-This is a PoC for a shim over the OpenSCAD language. It is mainly a simple code generator,
-but the idea is to overcome the fact that OpenSCAD does not have a dependency management
-system to easily reuse existing code by modularizing OpenSCAD source as Go code, and then
-use Go's tools to package and resolve the dependencies.
+This is a PoC for a shim over the OpenSCAD language. 
+
+Currently it has a half-baked OpenSCAD parser and printer, as well as building blocks to
+generate OpenSCAD code programmatically.
+
+# Parser
+
+Currently the parser does not report errors well (especially in the lexer),
+because I was being lazy during initial development.
 
 ```go
-func Example() {
-	width := dsl.Variable("width").Value(30)
-	stmts := dsl.Stmts(
-		width,
-		dsl.Module("foobar").
-			Parameters(width).
-			Actions(
-				dsl.Rotate(
-					0, 180, 0,
-					dsl.Translate(
-						dsl.List(10, 10, 10),
-						dsl.Cube(width, 40, 5).Fn(24),
-						dsl.Cube(5, 40, width),
-						dsl.Cylinder(10, 5, 15).Fa(12),
-					),
-				),
-			),
-		dsl.Call("foobar"),
-	)
+stmt, err := ast.Parse([]byte(...OpenSCAD source code...))
+```
 
-	stmts.Emit(context.Background(), os.Stdout)
-	//OUTPUT:
-	// width=30;
-	//
-	// module foobar(width=30)
-	// {
-	//   rotate([0, 180, 0])
-	//     translate([10, 10, 10])
-	//     {
-	//       cube([width, 40, 5], $fn=24);
-	//       cube([5, 40, width]);
-	//       cylinder(h=10, r1=5, r2=15, $fa=12);
-	//     }
-	// }
-	// foobar();
-}
+Parsed code does not contain comments.
+
+You can output this code back by using one of the `Emit` functions:
+
+```go
+ast.Emit(stmt, os.Stdout) // emits to stdout
+```
+
+# Amalgamation
+
+One of the goals of this library is to make (re)distribution of OpenSCAD code.
+Because OpenSCAD does not by itself have a way to handle file dependencies,
+it becomes increasingly harder to control these dependencies both for development
+and distribution.
+
+This library can make this slightly easier by allowing you to create amalgamated
+files, where all of the related source code is provided as a single file.
+
+For example, suppose you have an OpenSCAD code like the following:
+
+```openscad
+// main.scad
+include <foo.scad>
+```
+
+Then you could register this `main.scad` file and the `foo.scad` file in this
+library:
+
+```go
+openscad.RegisterFile(`main.scad`)
+opnescad.RegisterFile(`foo.scad`)
+```
+
+And then you could generate the amalgamated version using the following code
+
+```go
+stmt, _ := openscad.Lookup(`main.scad`)
+ast.Emit(stmt, os.Stdout, ast.WithAmalgamation())
 ```
