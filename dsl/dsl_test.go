@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/lestrrat-go/openscad/ast"
 	"github.com/lestrrat-go/openscad/dsl"
 	"gonum.org/v1/plot/tools/bezier"
 	"gonum.org/v1/plot/vg"
@@ -29,7 +30,7 @@ func Example() {
 		dsl.Call("foobar"),
 	)
 
-	openscad.Emit(stmts, os.Stdout)
+	ast.Emit(stmts, os.Stdout)
 	//OUTPUT:
 	// width=30;
 	//
@@ -51,7 +52,7 @@ func ExampleBezier2D() {
 		vg.Point{0, 0}, vg.Point{20, 2}, vg.Point{40, -1}, vg.Point{90, -3},
 	)
 
-	var pts openscad.Point2DList
+	var pts ast.Point2DList
 	for _, pt := range crv.Curve(make([]vg.Point, 90/0.02)) {
 		pts.Add(dsl.Point2D(pt.X, pt.Y))
 	}
@@ -62,7 +63,7 @@ func ExampleBezier2D() {
 		dsl.Polygon(points, nil),
 	)
 
-	openscad.Emit(stmts, os.Stdout)
+	ast.Emit(stmts, os.Stdout)
 }
 
 func TestOperatorPrecedence(t *testing.T) {

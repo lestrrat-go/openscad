@@ -1,101 +1,101 @@
 package dsl
 
 import (
-	"github.com/lestrrat-go/openscad"
+	"github.com/lestrrat-go/openscad/ast"
 )
 
-func Lookup(key, values interface{}) *openscad.LookupStmt {
-	return openscad.NewLookup(key, values)
+func Lookup(key, values interface{}) *ast.LookupStmt {
+	return ast.NewLookup(key, values)
 }
 
-func Call(name string, parameters ...interface{}) *openscad.Call {
-	call := openscad.NewCall(name)
+func Call(name string, parameters ...interface{}) *ast.Call {
+	call := ast.NewCall(name)
 	if len(parameters) > 0 {
 		call.Parameters(parameters...)
 	}
 	return call
 }
 
-func Children() *openscad.Children {
-	return openscad.NewChildren()
+func Children() *ast.Children {
+	return ast.NewChildren()
 }
 
-func Concat(values ...interface{}) *openscad.Call {
-	return openscad.NewCall("concat").Parameters(values...)
+func Concat(values ...interface{}) *ast.Call {
+	return ast.NewCall("concat").Parameters(values...)
 }
 
-func Declare(name string, value interface{}) *openscad.Declare {
-	return openscad.NewDeclare(Variable(name).Value(value))
+func Declare(name string, value interface{}) *ast.Declare {
+	return ast.NewDeclare(Variable(name).Value(value))
 }
 
-func For(vars ...*openscad.LoopVar) *openscad.ForBlock {
-	return openscad.NewFor(vars)
+func For(vars ...*ast.LoopVar) *ast.ForBlock {
+	return ast.NewFor(vars)
 }
 
-func ForExpr(vars ...*openscad.LoopVar) *openscad.ForExpr {
-	return openscad.NewForExpr(vars)
+func ForExpr(vars ...*ast.LoopVar) *ast.ForExpr {
+	return ast.NewForExpr(vars)
 }
 
-func ForRange(start, end interface{}) *openscad.ForRange {
-	return openscad.NewForRange(start, end)
+func ForRange(start, end interface{}) *ast.ForRange {
+	return ast.NewForRange(start, end)
 }
 
-func Function(name string) *openscad.Function {
-	return openscad.NewFunction(name)
+func Function(name string) *ast.Function {
+	return ast.NewFunction(name)
 }
 
-func Group(expr interface{}) *openscad.Group {
-	return openscad.NewGroup(expr)
+func Group(expr interface{}) *ast.Group {
+	return ast.NewGroup(expr)
 }
 
-func Include(name string) *openscad.Include {
-	return openscad.NewInclude(name)
+func Include(name string) *ast.Include {
+	return ast.NewInclude(name)
 }
 
-func Index(v, index interface{}) *openscad.Index {
-	return openscad.NewIndex(v, index)
+func Index(v, index interface{}) *ast.Index {
+	return ast.NewIndex(v, index)
 }
 
-func Len(v interface{}) *openscad.Len {
-	return openscad.NewLen(v)
+func Len(v interface{}) *ast.Len {
+	return ast.NewLen(v)
 }
 
-func LetBlock(vars ...*openscad.Variable) *openscad.LetBlock {
-	return openscad.NewLetBlock(vars...)
+func LetBlock(vars ...*ast.Variable) *ast.LetBlock {
+	return ast.NewLetBlock(vars...)
 }
 
-func LetExpr(vars ...*openscad.Variable) *openscad.LetExpr {
-	return openscad.NewLetExpr(vars...)
+func LetExpr(vars ...*ast.Variable) *ast.LetExpr {
+	return ast.NewLetExpr(vars...)
 }
 
 func List(values ...interface{}) []interface{} {
 	return values
 }
 
-func LoopVar(v *openscad.Variable, expr interface{}) *openscad.LoopVar {
-	return openscad.NewLoopVar(v, expr)
+func LoopVar(v *ast.Variable, expr interface{}) *ast.LoopVar {
+	return ast.NewLoopVar(v, expr)
 }
 
-func Module(name string) *openscad.Module {
-	return openscad.NewModule(name)
+func Module(name string) *ast.Module {
+	return ast.NewModule(name)
 }
 
-func Render() *openscad.Render {
-	return openscad.NewRender()
+func Render() *ast.Render {
+	return ast.NewRender()
 }
 
-func Stmts(stmts ...openscad.Stmt) openscad.Stmts {
-	return openscad.Stmts(stmts)
+func Stmts(stmts ...ast.Stmt) ast.Stmts {
+	return ast.Stmts(stmts)
 }
 
-func Ternary(cond, left, right interface{}) *openscad.TernaryOp {
-	return openscad.NewTernaryOp(cond, left, right)
+func Ternary(cond, left, right interface{}) *ast.TernaryOp {
+	return ast.NewTernaryOp(cond, left, right)
 }
 
-func Use(name string) *openscad.Use {
-	return openscad.NewUse(name)
+func Use(name string) *ast.Use {
+	return ast.NewUse(name)
 }
 
-func Variable(name string) *openscad.Variable {
-	return openscad.NewVariable(name)
+func Variable(name string) *ast.Variable {
+	return ast.NewVariable(name)
 }

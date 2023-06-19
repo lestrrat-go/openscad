@@ -1,15 +1,15 @@
 package joints
 
 import (
-	"github.com/lestrrat-go/openscad"
+	"github.com/lestrrat-go/openscad/ast"
 	"github.com/lestrrat-go/openscad/dsl"
 )
 
 func init() {
-	openscad.Register("dovetail.scad", Dovetail())
+	ast.Register("dovetail.scad", Dovetail())
 }
 
-func Dovetail() openscad.Stmt {
+func Dovetail() ast.Stmt {
 	return dsl.Stmts(
 		DovetailTopOffset(),
 		DovetailTenon(),
@@ -20,7 +20,7 @@ func Dovetail() openscad.Stmt {
 // direction for the top of the dovetail. Assuming that
 // the origin of the bottom of the dovetail is at (0,0),
 // the top should be at (-offset, height)
-func DovetailTopOffset() openscad.Stmt {
+func DovetailTopOffset() ast.Stmt {
 	base := dsl.Variable("base")
 	height := dsl.Variable("height")
 	bh := dsl.Variable("backtrack_height")
@@ -50,7 +50,7 @@ func DovetailTopOffset() openscad.Stmt {
 	)
 }
 
-func DovetailTenon() openscad.Stmt {
+func DovetailTenon() ast.Stmt {
 	// calculate starting from the "bottom" (base)of the ari
 	//
 	//   top

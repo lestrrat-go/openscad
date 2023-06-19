@@ -7,6 +7,10 @@ import (
 	"github.com/lestrrat-go/openscad/ast"
 )
 
+func Register(name string, stmt ast.Stmt) error {
+	return ast.Register(name, stmt)
+}
+
 func Lookup(name string) (ast.Stmt, bool) {
 	return ast.Lookup(name)
 }

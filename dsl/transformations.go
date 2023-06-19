@@ -1,19 +1,19 @@
 package dsl
 
-import "github.com/lestrrat-go/openscad"
+import "github.com/lestrrat-go/openscad/ast"
 
-func Hull(stmts ...openscad.Stmt) *openscad.Hull {
-	return openscad.NewHull().Body(stmts...)
+func Hull(stmts ...ast.Stmt) *ast.Hull {
+	return ast.NewHull().Body(stmts...)
 }
 
-func LinearExtrude(height, center, convexity, twist, slices interface{}) *openscad.LinearExtrude {
-	return openscad.NewLinearExtrude(height, center, convexity, twist, slices)
+func LinearExtrude(height, center, convexity, twist, slices interface{}) *ast.LinearExtrude {
+	return ast.NewLinearExtrude(height, center, convexity, twist, slices)
 }
 
-func Translate(v interface{}, children ...openscad.Stmt) *openscad.Translate {
-	return openscad.NewTranslate(v, children...)
+func Translate(v interface{}, children ...ast.Stmt) *ast.Translate {
+	return ast.NewTranslate(v, children...)
 }
 
-func Rotate(v interface{}, children ...openscad.Stmt) *openscad.Rotate {
-	return openscad.NewRotate(v, children...)
+func Rotate(v interface{}, children ...ast.Stmt) *ast.Rotate {
+	return ast.NewRotate(v, children...)
 }
