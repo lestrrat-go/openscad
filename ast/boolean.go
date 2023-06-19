@@ -25,7 +25,7 @@ func (op *noArgBlock) Body(s ...Stmt) {
 
 func (op *noArgBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, `%s%s()`, ctx.Indent(), op.name)
-	return emitChildren(ctx, w, op.children)
+	return emitChildren(ctx, w, op.children, true)
 }
 
 func NewUnion(children ...Stmt) *Union {

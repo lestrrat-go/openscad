@@ -32,7 +32,7 @@ func (t *Translate) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprint(w, `translate(`)
 	emitExpr(ctx.WithAllowAssignment(false), w, t.v)
 	fmt.Fprint(w, `)`)
-	return emitChildren(ctx, w, t.children)
+	return emitChildren(ctx, w, t.children, true)
 }
 
 func (t *Translate) EmitStmt(ctx *EmitContext, w io.Writer) error {
@@ -69,7 +69,7 @@ func (r *Rotate) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	emitExpr(ctx, w, r.v)
 	fmt.Fprint(w, `)`)
 
-	return emitChildren(ctx, w, r.children)
+	return emitChildren(ctx, w, r.children, false)
 }
 
 type LinearExtrude struct {
@@ -130,7 +130,7 @@ func (l *LinearExtrude) EmitStmt(ctx *EmitContext, w io.Writer) error {
 		emitFn(w, l.fn)
 	}
 	fmt.Fprint(w, `)`)
-	return emitChildren(ctx, w, l.children)
+	return emitChildren(ctx, w, l.children, false)
 }
 
 type Hull struct{ noArgBlock }

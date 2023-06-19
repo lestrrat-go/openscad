@@ -101,12 +101,7 @@ module ring() {
 
 module holder_base() {
     translate([0, -5, outer_depth-outer_depth/3-1.7/*-ring_corner_radius*2*/]) {
-        //render() difference()
-        {
         ring();
-            //translate([0, -10, -1]) cube([ring_width, outer_height*2, outer_depth]);
-            //translate([0, outer_height/2, -10]) cube([ring_width, outer_height, outer_depth]);
-        }
     }
 }
 

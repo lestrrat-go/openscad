@@ -74,7 +74,7 @@ func (l *LetBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if err := emitLetPreamble(ctx, w, l.variables); err != nil {
 		return err
 	}
-	emitChildren(ctx, w, l.children)
+	emitChildren(ctx, w, l.children, false)
 	return nil
 }
 
@@ -206,11 +206,11 @@ func (f *ForBlock) Add(stmts ...Stmt) *ForBlock {
 
 func (f *ForBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	indent := ctx.Indent()
-	fmt.Fprint(w, indent)
+	fmt.Fprintf(w, "\n%s", indent)
 	if err := emitForDecl(ctx, w, f.loopVars); err != nil {
 		return err
 	}
-	emitChildren(ctx, w, f.children)
+	emitChildren(ctx, w, f.children, true)
 	return nil
 }
 
