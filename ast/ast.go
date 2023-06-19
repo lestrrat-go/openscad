@@ -163,7 +163,7 @@ type Module struct {
 	children   []Stmt
 }
 
-func emitChildren(ctx *EmitContext, w io.Writer, children []Stmt) error {
+func emitChildren(ctx *EmitContext, w io.Writer, children []Stmt, forceBrace bool) error {
 	indent := ctx.Indent()
 	numc := len(children)
 	if numc == 0 {
@@ -171,14 +171,12 @@ func emitChildren(ctx *EmitContext, w io.Writer, children []Stmt) error {
 	}
 
 	ctx = ctx.IncrIndent()
-	if numc == 1 {
-		fmt.Fprintf(w, "\n")
+	if numc == 1 && !forceBrace {
 		return children[0].EmitStmt(ctx, w)
 	}
 
 	fmt.Fprintf(w, "\n%s{", indent)
 	for _, c := range children {
-		fmt.Fprintf(w, "\n")
 		if err := c.EmitStmt(ctx, w); err != nil {
 			return err
 		}
@@ -215,7 +213,8 @@ func (m *Module) Body(children ...Stmt) *Module {
 }
 
 func (m *Module) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprintf(w, "\nmodule %s(", m.name)
+	indent := ctx.Indent()
+	fmt.Fprintf(w, "\n%smodule %s(", indent, m.name)
 
 	{
 		pctx := ctx.WithAllowAssignment(true)
@@ -226,16 +225,11 @@ func (m *Module) EmitStmt(ctx *EmitContext, w io.Writer) error {
 			emitValue(pctx, w, param)
 		}
 	}
-	fmt.Fprintf(w, ")\n{")
+	fmt.Fprintf(w, ")")
 
-	ctx = ctx.IncrIndent()
-	for _, c := range m.children {
-		fmt.Fprintf(w, "\n")
-		if err := c.EmitStmt(ctx, w); err != nil {
-			return err
-		}
+	if err := emitChildren(ctx, w, m.children, true); err != nil {
+		return err
 	}
-	fmt.Fprintf(w, "\n}")
 	return nil
 }
 
@@ -270,13 +264,13 @@ func (c *Call) Add(children ...Stmt) *Call {
 }
 
 func (c *Call) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprintf(w, `%s`, ctx.Indent())
+	fmt.Fprintf(w, "\n%s", ctx.Indent())
 	if err := c.EmitExpr(ctx, w); err != nil {
 		return err
 	}
 
 	if children := c.children; len(children) > 0 {
-		return emitChildren(ctx, w, children)
+		return emitChildren(ctx, w, children, false)
 	}
 
 	// only emit the last semicolon if there are no children
@@ -355,18 +349,6 @@ func NewUse(name string) *Use {
 	}
 }
 
-type Render struct{ noArgBlock }
-
-func NewRender() *Render {
-	return &Render{noArgBlock{name: `render`}}
-}
-
-func (r *Render) Body(children ...Stmt) *Render {
-	r.children = make([]Stmt, len(children))
-	copy(r.children, children)
-	return r
-}
-
 type Index struct {
 	expr  interface{}
 	index interface{}
@@ -398,4 +380,23 @@ func (i *Index) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	}
 	fmt.Fprintf(w, "]")
 	return nil
+}
+
+type BareBlock struct {
+	children []Stmt
+}
+
+func NewBareBlock(children ...Stmt) *BareBlock {
+	return &BareBlock{
+		children: children,
+	}
+}
+
+func (b *BareBlock) Add(children ...Stmt) *BareBlock {
+	b.children = append(b.children, children...)
+	return b
+}
+
+func (b *BareBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	return emitChildren(ctx, w, b.children, true)
 }

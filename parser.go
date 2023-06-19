@@ -107,11 +107,11 @@ func (p *parser) handleStatements() (ast.Stmts, error) {
 			stmts = append(stmts, stmt)
 		case OpenBrace:
 			p.Unread()
-			stmts, err := p.handleBlock()
+			block, err := p.handleBlock()
 			if err != nil {
 				return nil, err
 			}
-			stmts = append(stmts, stmts...)
+			stmts = append(stmts, ast.NewBareBlock(block...))
 		case CloseBrace:
 			p.Unread()
 			return stmts, nil

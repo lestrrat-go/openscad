@@ -80,8 +80,8 @@ func Module(name string) *ast.Module {
 	return ast.NewModule(name)
 }
 
-func Render() *ast.Render {
-	return ast.NewRender()
+func Render() *ast.Call {
+	return ast.NewCall("render")
 }
 
 func Stmts(stmts ...ast.Stmt) ast.Stmts {
