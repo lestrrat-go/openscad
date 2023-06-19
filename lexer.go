@@ -3,7 +3,6 @@ package openscad
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -95,7 +94,6 @@ func (l *lexer) consume(v []byte) {
 }
 
 func (l *lexer) emit(typ int, value string) {
-	log.Printf("emit %q", value)
 	l.ch <- &Token{Type: typ, Value: value}
 }
 
@@ -108,7 +106,6 @@ func (l *lexer) peek() rune {
 	r, s := utf8.DecodeRune(l.src[l.pos:])
 	l.pos += s
 	l.peekPos = append(l.peekPos, s)
-	// log.Printf("peeked %q", r)
 	return r
 }
 
@@ -117,11 +114,9 @@ func (l *lexer) unread() {
 		l.pos -= l.peekPos[lp-1]
 		l.peekPos = l.peekPos[:lp-1]
 	}
-	// log.Printf("unread (pos=%d)", l.pos)
 }
 
 func (l *lexer) advance() {
-	// log.Printf("advance %d", l.pos)
 	l.peekPos = nil
 	l.src = l.src[l.pos:]
 	l.pos = 0
@@ -141,8 +136,6 @@ func Lex(ch chan *Token, src []byte) {
 
 	var inInclude bool
 	for len(l.src) > 0 {
-		// log.Printf("l.src = %q", l.src)
-		log.Printf("Lex loop (inInclude=%t)", inInclude)
 		l.skipWhiteSpaces()
 
 		found := true
@@ -259,7 +252,6 @@ func Lex(ch chan *Token, src []byte) {
 		case 'm':
 			l.unread()
 			if err := l.expect(Keyword, moduleKeyword); err != nil {
-				log.Printf("found 'm', but module did not match")
 				found = false
 			}
 		case 'f':
@@ -293,7 +285,6 @@ func Lex(ch chan *Token, src []byte) {
 		// it must be an identifier, then
 		l.captureIdent()
 	}
-	// log.Printf("emit EOF")
 	l.emit(EOF, "")
 }
 
@@ -304,7 +295,6 @@ func (l *lexer) peekExpect(typ int, v []byte) bool {
 
 func (l *lexer) expect(typ int, v []byte) error {
 	l.skipWhiteSpaces()
-	//log.Printf("expect %q, l.src= %q", v, l.src[l.pos:])
 	if !bytes.Equal(v, l.src[l.pos:len(v)]) {
 		return fmt.Errorf("expected %q, but was not foud", v)
 	}
@@ -323,13 +313,11 @@ func (l *lexer) captureNumericLike(sb *strings.Builder) {
 			l.unread()
 			break
 		}
-		log.Printf("numeric -> %q", r)
 		sb.WriteRune(r)
 	}
 }
 
 func (l *lexer) captureNumeric() error {
-	log.Printf("captureNumeric")
 	l.skipWhiteSpaces()
 	var sb strings.Builder
 
@@ -343,7 +331,6 @@ func (l *lexer) captureNumeric() error {
 	l.captureNumericLike(&sb)
 
 	r = l.peek()
-	log.Printf("after numeric part, got %q", r)
 	if r == '.' {
 		sb.WriteRune(r)
 		l.captureNumericLike(&sb)

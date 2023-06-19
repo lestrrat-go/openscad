@@ -2,7 +2,6 @@ package openscad
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/lestrrat-go/openscad/ast"
@@ -38,9 +37,7 @@ func Parse(src []byte) (ast.Stmts, error) {
 func (p *parser) handleStatements() (ast.Stmts, error) {
 	var stmts ast.Stmts
 	for {
-		log.Printf("new loop in handle any")
 		tok := p.Peek()
-		log.Printf("handleStatements: %#v", tok)
 		switch tok.Type {
 		case Keyword:
 			switch tok.Value {
@@ -103,7 +100,6 @@ func (p *parser) handleStatements() (ast.Stmts, error) {
 			if semicolon {
 				tok = p.Next()
 				if tok.Type != Semicolon {
-					log.Printf("%#v", stmt)
 					return nil, fmt.Errorf(`expected semicolon after assignment or function call, got %q`, tok.Value)
 				}
 			}
@@ -131,14 +127,12 @@ func (p *parser) Peek() *Token {
 		p.peeked = append(p.peeked, tok)
 	}
 	p.readPos++
-	log.Printf("peek peeked=%d, readPos=%d", len(p.peeked), p.readPos)
 	return p.peeked[p.readPos]
 }
 
 // Advance is akin to committing the previously peeked reads, effectively
 // throwing away every buffered Token up to the current reading position
 func (p *parser) Advance() {
-	log.Printf("advance (BEFORE): peeked=%d, p.readPos=%d", len(p.peeked), p.readPos)
 	if p.readPos > -1 {
 		p.peeked = p.peeked[p.readPos:]
 		if len(p.peeked) > 0 {
@@ -147,14 +141,12 @@ func (p *parser) Advance() {
 			p.readPos = -1
 		}
 	}
-	log.Printf("advance: peeked=%d, p.readPos=%d", len(p.peeked), p.readPos)
 }
 
 func (p *parser) Unread() {
 	if p.readPos >= 0 {
 		p.readPos--
 	}
-	log.Printf("unread -> %d", p.readPos)
 }
 
 func (p *parser) Next() *Token {
@@ -168,8 +160,6 @@ func (p *parser) Next() *Token {
 }
 
 func (p *parser) handleModule() (*ast.Module, error) {
-	log.Printf("START module")
-	defer log.Printf("END module")
 	// module moduleName ( [... args ...]? ) { ... body ... }
 	tok := p.Next()
 	if tok.Type != Keyword || tok.Value != `module` {
@@ -196,8 +186,6 @@ func (p *parser) handleModule() (*ast.Module, error) {
 }
 
 func (p *parser) handleParameterList() ([]*ast.Variable, error) {
-	log.Printf("START parameter list")
-	defer log.Printf("END parameter list")
 	tok := p.Next()
 	if tok.Type != OpenParen {
 		return nil, fmt.Errorf("expected open parenthesis")
@@ -231,8 +219,6 @@ OUTER:
 }
 
 func (p *parser) handleParamDecl() (*ast.Variable, error) {
-	log.Printf("START param decl")
-	defer log.Printf("END param decl")
 	tok := p.Next()
 	if tok.Type != Ident {
 		return nil, fmt.Errorf(`expected ident for param decl, got %q`, tok.Value)
@@ -256,8 +242,6 @@ func (p *parser) handleParamDecl() (*ast.Variable, error) {
 }
 
 func (p *parser) handleBlock() (ast.Stmts, error) {
-	log.Printf("START block")
-	defer log.Printf("END block")
 	tok := p.Next()
 	if tok.Type != OpenBrace {
 		return nil, fmt.Errorf(`expected open brace, got %q`, tok.Value)
@@ -272,20 +256,16 @@ func (p *parser) handleBlock() (ast.Stmts, error) {
 	if tok.Type != CloseBrace {
 		return nil, fmt.Errorf(`expected close brace, got %q`, tok.Value)
 	}
-	log.Printf("consumed close brace")
 	return stmts, nil
 }
 
 func (p *parser) handleAssignment() (*ast.Variable, error) {
-	log.Printf("START assignment")
-	defer log.Printf("END assignment")
 	tok := p.Next()
 	if tok.Type != Ident {
 		return nil, fmt.Errorf(`expected identity of variable to assign to, got %q`, tok.Value)
 	}
 	varName := tok.Value
 	v := ast.NewVariable(varName)
-	log.Printf("handleAssignment %#v", tok)
 
 	tok = p.Next()
 	if tok.Type != Equal {
@@ -298,13 +278,10 @@ func (p *parser) handleAssignment() (*ast.Variable, error) {
 	}
 	v.Value(expr)
 
-	log.Printf("variable %q value %#v", varName, expr)
 	return v, nil
 }
 
 func (p *parser) handleCall() (*ast.Call, bool, error) {
-	log.Printf("START call")
-	defer log.Printf("END call")
 	tok := p.Next()
 	if tok.Type != Ident {
 		return nil, false, fmt.Errorf(`expected function name, got %q`, tok.Value)
@@ -343,7 +320,6 @@ OUTER:
 		}
 	}
 
-	log.Printf("call parameters %#v", parameters)
 	call.Parameters(parameters...)
 
 	// If there is either a block or another function call, that's a child statement
@@ -368,20 +344,14 @@ OUTER:
 		call.Add(child)
 		semicolon = childsemicolon
 	default:
-		log.Printf("No children")
 		semicolon = true
 		p.Unread()
 	}
 
-	log.Printf("call %q semicolon %t", callName, semicolon)
 	return call, semicolon, nil
 }
 
 func (p *parser) handleParenExpr() (ret interface{}, reterr error) {
-	log.Printf("START parenexpr")
-	defer func(reterr *error) {
-		log.Printf("END parenexpr: %#v", *reterr)
-	}(&reterr)
 	tok := p.Next()
 	if tok.Type != OpenParen {
 		return nil, fmt.Errorf(`expected open paren, got %q`, tok.Value)
@@ -400,11 +370,6 @@ func (p *parser) handleParenExpr() (ret interface{}, reterr error) {
 }
 
 func (p *parser) handleExpr() (ret interface{}, reterr error) {
-	log.Printf("START expr")
-	defer func(ret *interface{}) {
-		log.Printf("END expr %#v", *ret)
-	}(&ret)
-
 	var expr interface{}
 
 	tok := p.Next()
@@ -481,8 +446,6 @@ func (p *parser) handleExpr() (ret interface{}, reterr error) {
 }
 
 func (p *parser) handleTernary(cond interface{}) (interface{}, error) {
-	log.Printf("START ternary")
-	defer log.Printf("END ternary")
 	tok := p.Next()
 	if tok.Type != Question {
 		return nil, fmt.Errorf(`expected question mark, got %q`, tok.Value)
@@ -537,8 +500,6 @@ func (p *parser) handleAssignmentOrFunctionCall() (ast.Stmt, bool, error) {
 }
 
 func (p *parser) handleList() ([]interface{}, error) {
-	log.Printf("START list")
-	defer log.Printf("END list")
 	tok := p.Next()
 	if tok.Type != OpenBracket {
 		return nil, fmt.Errorf(`expected open bracket, got %q`, tok.Value)
@@ -755,7 +716,6 @@ func (p *parser) tryOperator(left interface{}) (interface{}, error) {
 		}
 		ret = expr2
 	default:
-		log.Printf("not an operator %#v", tok)
 		p.Unread()
 		return left, nil
 	}
@@ -832,8 +792,6 @@ func (p *parser) handleForPreamble() ([]*ast.LoopVar, error) {
 }
 
 func (p *parser) handleForRange() (*ast.ForRange, error) {
-	log.Printf("START handleForRange")
-	defer log.Printf("END handleForRange")
 	tok := p.Next()
 	if tok.Type != OpenBracket {
 		return nil, fmt.Errorf(`expected open bracket, got %q`, tok.Value)
@@ -898,7 +856,6 @@ func (p *parser) handleForLoopVariable() (*ast.LoopVar, error) {
 	if err == nil {
 		frexpr = fr
 	} else {
-		log.Printf("failed for range: %s", err)
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse for loop variable expression: %w`, err)
@@ -973,8 +930,6 @@ func (p *parser) handleLetPreamble() ([]*ast.Variable, error) {
 }
 
 func (p *parser) handleInclude() (*ast.Include, error) {
-	log.Printf("START include")
-	defer log.Printf("END include")
 	tok := p.Next()
 	if tok.Type != Keyword || tok.Value != "include" {
 		return nil, fmt.Errorf(`expected include, got %q`, tok.Value)
