@@ -9,7 +9,7 @@ generate OpenSCAD code programmatically.
 # Parser
 
 Currently the parser does not report errors well (especially in the lexer),
-because I was being lazy during initial development.
+because I was being lazy during initial development. PRs are very much welcome.
 
 ```go
 stmt, err := ast.Parse([]byte(...OpenSCAD source code...))
