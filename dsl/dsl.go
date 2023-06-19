@@ -56,8 +56,8 @@ func Index(v, index interface{}) *ast.Index {
 	return ast.NewIndex(v, index)
 }
 
-func Len(v interface{}) *ast.Len {
-	return ast.NewLen(v)
+func Len(v interface{}) *ast.Call {
+	return ast.NewCall("len").Parameters(v)
 }
 
 func LetBlock(vars ...*ast.Variable) *ast.LetBlock {

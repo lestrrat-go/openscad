@@ -3,6 +3,7 @@ package ast
 import (
 	"fmt"
 	"io"
+	"strings"
 )
 
 func emitLetPreamble(ctx *EmitContext, w io.Writer, vars []*Variable) error {
@@ -116,6 +117,12 @@ func NewLoopVar(variable *Variable, expr interface{}) *LoopVar {
 		variable: variable,
 		expr:     expr,
 	}
+}
+
+func (lv *LoopVar) String() string {
+	var sb strings.Builder
+	lv.EmitExpr(newEmitContext(), &sb)
+	return sb.String()
 }
 
 func (lv *LoopVar) EmitExpr(ctx *EmitContext, w io.Writer) error {

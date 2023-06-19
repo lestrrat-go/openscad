@@ -3,9 +3,16 @@
 package threads
 
 import (
+	"embed"
+
 	"github.com/lestrrat-go/openscad"
 )
 
+//go:embed threads.scad
+var src embed.FS
+
 func init() {
-	openscad.RegisterFile("threads.scad")
+	if err := openscad.RegisterFile("threads.scad", openscad.WithFS(src)); err != nil {
+		panic(err)
+	}
 }

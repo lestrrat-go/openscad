@@ -2,6 +2,7 @@ package openscad
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 
 	"github.com/lestrrat-go/openscad/ast"
@@ -16,6 +17,7 @@ func Lookup(name string) (ast.Stmt, bool) {
 }
 
 func RegisterFile(filename string, options ...RegisterFileOption) error {
+	srcfs := os.DirFS(".")
 	lookupName := filename
 
 	//nolint:forcetypeassert
@@ -23,10 +25,12 @@ func RegisterFile(filename string, options ...RegisterFileOption) error {
 		switch option.Ident() {
 		case optLookupNameKey{}:
 			lookupName = option.Value().(string)
+		case optFSKey{}:
+			srcfs = option.Value().(fs.FS)
 		}
 	}
 
-	code, err := os.ReadFile(filename)
+	code, err := fs.ReadFile(srcfs, filename)
 	if err != nil {
 		return fmt.Errorf("failed to read %q: %w", filename, err)
 	}
