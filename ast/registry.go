@@ -1,4 +1,4 @@
-package openscad
+package ast
 
 import (
 	"sync"

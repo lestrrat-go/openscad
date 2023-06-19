@@ -1,67 +1,101 @@
 package dsl
 
-import "github.com/lestrrat-go/openscad"
+import (
+	"github.com/lestrrat-go/openscad/ast"
+)
 
-func Call(name string, parameters ...interface{}) *openscad.Call {
-	call := openscad.NewCall(name)
+func Lookup(key, values interface{}) *ast.LookupStmt {
+	return ast.NewLookup(key, values)
+}
+
+func Call(name string, parameters ...interface{}) *ast.Call {
+	call := ast.NewCall(name)
 	if len(parameters) > 0 {
 		call.Parameters(parameters...)
 	}
 	return call
 }
 
-func Children() *openscad.Children {
-	return openscad.NewChildren()
+func Children() *ast.Children {
+	return ast.NewChildren()
 }
 
-func Div(left, right interface{}) *openscad.BinaryOp {
-	return openscad.NewBinaryOp("/", left, right)
+func Concat(values ...interface{}) *ast.Call {
+	return ast.NewCall("concat").Parameters(values...)
 }
 
-func For(vars ...*openscad.LoopVar) *openscad.For {
-	return openscad.NewFor(vars)
+func Declare(name string, value interface{}) *ast.Declare {
+	return ast.NewDeclare(Variable(name).Value(value))
 }
 
-func ForRange(start, end interface{}) *openscad.ForRange {
-	return openscad.NewForRange(start, end)
+func For(vars ...*ast.LoopVar) *ast.ForBlock {
+	return ast.NewFor(vars)
 }
 
-func Function(name string) *openscad.Function {
-	return openscad.NewFunction(name)
+func ForExpr(vars ...*ast.LoopVar) *ast.ForExpr {
+	return ast.NewForExpr(vars)
 }
 
-func Include(name string) *openscad.Include {
-	return openscad.NewInclude(name)
+func ForRange(start, end interface{}) *ast.ForRange {
+	return ast.NewForRange(start, end)
 }
 
-func Let(vars ...*openscad.Variable) *openscad.Let {
-	return openscad.NewLet(vars...)
+func Function(name string) *ast.Function {
+	return ast.NewFunction(name)
+}
+
+func Group(expr interface{}) *ast.Group {
+	return ast.NewGroup(expr)
+}
+
+func Include(name string) *ast.Include {
+	return ast.NewInclude(name)
+}
+
+func Index(v, index interface{}) *ast.Index {
+	return ast.NewIndex(v, index)
+}
+
+func Len(v interface{}) *ast.Len {
+	return ast.NewLen(v)
+}
+
+func LetBlock(vars ...*ast.Variable) *ast.LetBlock {
+	return ast.NewLetBlock(vars...)
+}
+
+func LetExpr(vars ...*ast.Variable) *ast.LetExpr {
+	return ast.NewLetExpr(vars...)
 }
 
 func List(values ...interface{}) []interface{} {
 	return values
 }
 
-func LoopVar(v *openscad.Variable, expr interface{}) *openscad.LoopVar {
-	return openscad.NewLoopVar(v, expr)
+func LoopVar(v *ast.Variable, expr interface{}) *ast.LoopVar {
+	return ast.NewLoopVar(v, expr)
 }
 
-func Module(name string) *openscad.Module {
-	return openscad.NewModule(name)
+func Module(name string) *ast.Module {
+	return ast.NewModule(name)
 }
 
-func Mul(left, right interface{}) *openscad.BinaryOp {
-	return openscad.NewBinaryOp("*", left, right)
+func Render() *ast.Render {
+	return ast.NewRender()
 }
 
-func Stmts(stmts ...openscad.Stmt) openscad.Stmts {
-	return openscad.Stmts(stmts)
+func Stmts(stmts ...ast.Stmt) ast.Stmts {
+	return ast.Stmts(stmts)
 }
 
-func Use(name string) *openscad.Use {
-	return openscad.NewUse(name)
+func Ternary(cond, left, right interface{}) *ast.TernaryOp {
+	return ast.NewTernaryOp(cond, left, right)
 }
 
-func Variable(name string) *openscad.Variable {
-	return openscad.NewVariable(name)
+func Use(name string) *ast.Use {
+	return ast.NewUse(name)
+}
+
+func Variable(name string) *ast.Variable {
+	return ast.NewVariable(name)
 }
