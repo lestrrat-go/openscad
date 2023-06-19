@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/lestrrat-go/blackmagic"
 )
@@ -104,6 +105,14 @@ func NewVariable(name string) *Variable {
 	return &Variable{
 		name: name,
 	}
+}
+
+func (p *Variable) String() string {
+	var sb strings.Builder
+	if err := p.EmitExpr(newEmitContext(), &sb); err != nil {
+		panic(err)
+	}
+	return sb.String()
 }
 
 func (p *Variable) HasValue() bool {
@@ -242,6 +251,14 @@ func NewCall(name string) *Call {
 	}
 }
 
+func (c *Call) String() string {
+	var sb strings.Builder
+	if err := c.EmitExpr(newEmitContext(), &sb); err != nil {
+		panic(err)
+	}
+	return sb.String()
+}
+
 func (c *Call) Parameters(params ...interface{}) *Call {
 	c.parameters = append(c.parameters, params...)
 	return c
@@ -360,6 +377,15 @@ func NewIndex(expr, index interface{}) *Index {
 		expr:  expr,
 		index: index,
 	}
+}
+
+func (i *Index) String() string {
+	var sb strings.Builder
+	if err := i.EmitExpr(newEmitContext(), &sb); err != nil {
+		panic(err)
+	}
+	return sb.String()
+
 }
 
 func (i *Index) EmitExpr(ctx *EmitContext, w io.Writer) error {

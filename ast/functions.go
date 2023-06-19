@@ -86,24 +86,3 @@ func (l *LookupStmt) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	}
 	return nil
 }
-
-type Len struct {
-	value interface{}
-}
-
-func NewLen(value interface{}) *Len {
-	return &Len{
-		value: value,
-	}
-}
-
-func (l *Len) EmitExpr(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprint(w, "len(")
-	ctx = ctx.WithAllowAssignment(false)
-
-	if err := emitExpr(ctx, w, l.value); err != nil {
-		return err
-	}
-	fmt.Fprintf(w, ")")
-	return nil
-}

@@ -134,7 +134,7 @@ func EmitFile(filename string, w io.Writer, options ...EmitFileOption) error {
 
 	stmt, ok := registry.Lookup(filename)
 	if !ok {
-		return fmt.Errorf(`no such file: %s`, filename)
+		return fmt.Errorf(`failed to execute EmitFile: no such file: %s`, filename)
 	}
 
 	if err := Emit(stmt, w, emitOptions...); err != nil {

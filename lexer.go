@@ -178,10 +178,8 @@ func Lex(ch chan *Token, src []byte) {
 			l.emitBuffer(Minus)
 		case slash:
 			next := l.peek()
-			if next != slash {
-				l.unread()
-				l.emitBuffer(Slash)
-			} else {
+			switch next {
+			case slash:
 				// inline comment, ignore until end of line
 				for {
 					r := l.peek()
@@ -190,6 +188,25 @@ func Lex(ch chan *Token, src []byte) {
 					}
 				}
 				l.advance()
+			case asterisk:
+				// block comment, ignore until */
+			OUTER:
+				for {
+					r := l.peek()
+					switch r {
+					case utf8.RuneError:
+						break OUTER
+					case asterisk:
+						next := l.peek()
+						if next == slash {
+							break OUTER
+						}
+					}
+				}
+				l.advance()
+			default:
+				l.unread()
+				l.emitBuffer(Slash)
 			}
 		case lessThan:
 			if inInclude {

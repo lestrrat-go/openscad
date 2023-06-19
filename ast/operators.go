@@ -3,6 +3,7 @@ package ast
 import (
 	"fmt"
 	"io"
+	"strings"
 )
 
 type Group struct {
@@ -13,6 +14,14 @@ func NewGroup(expr interface{}) *Group {
 	return &Group{
 		expr: expr,
 	}
+}
+
+func (g *Group) String() string {
+	var sb strings.Builder
+	if err := g.EmitExpr(newEmitContext(), &sb); err != nil {
+		panic(err)
+	}
+	return sb.String()
 }
 
 func (g *Group) EmitExpr(ctx *EmitContext, w io.Writer) error {
@@ -56,6 +65,14 @@ func NewBinaryOp(op string, left, right interface{}) *BinaryOp {
 		left:  left,
 		right: right,
 	}
+}
+
+func (op *BinaryOp) String() string {
+	var sb strings.Builder
+	if err := op.EmitExpr(newEmitContext(), &sb); err != nil {
+		panic(err)
+	}
+	return sb.String()
 }
 
 func (op *BinaryOp) BindPrecedence() int {

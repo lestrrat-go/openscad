@@ -31,6 +31,7 @@ func Parse(src []byte) (ast.Stmts, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse: %w`, err)
 	}
+
 	return stmts, nil
 }
 
@@ -104,6 +105,13 @@ func (p *parser) handleStatements() (ast.Stmts, error) {
 				}
 			}
 			stmts = append(stmts, stmt)
+		case OpenBrace:
+			p.Unread()
+			stmts, err := p.handleBlock()
+			if err != nil {
+				return nil, err
+			}
+			stmts = append(stmts, stmts...)
 		case CloseBrace:
 			p.Unread()
 			return stmts, nil
@@ -249,7 +257,7 @@ func (p *parser) handleBlock() (ast.Stmts, error) {
 
 	stmts, err := p.handleStatements()
 	if err != nil {
-		return nil, fmt.Errorf(`failed to parse block: %w`, err)
+		return nil, fmt.Errorf(`failed to parse block statements: %w`, err)
 	}
 
 	tok = p.Next()
@@ -330,7 +338,7 @@ OUTER:
 		p.Unread()
 		stmts, err := p.handleBlock()
 		if err != nil {
-			return nil, false, fmt.Errorf(`failed to parse block: %w`, err)
+			return nil, false, fmt.Errorf(`failed to parse function block: %w`, err)
 		}
 		call.Add(stmts...)
 		semicolon = false
@@ -343,6 +351,19 @@ OUTER:
 		}
 		call.Add(child)
 		semicolon = childsemicolon
+	case Keyword:
+		p.Unread()
+		// Allow for block after a funciton call()
+		if tok.Value != "for" {
+			return nil, false, fmt.Errorf(`unexpected keyword %q`, tok.Value)
+		}
+
+		forBlock, err := p.handleForBlock()
+		if err != nil {
+			return nil, false, fmt.Errorf(`failed to parse for block: %w`, err)
+		}
+		call.Add(forBlock)
+		semicolon = false
 	default:
 		semicolon = true
 		p.Unread()
@@ -400,12 +421,12 @@ func (p *parser) handleExpr() (ret interface{}, reterr error) {
 		}
 		expr = pe
 	case Minus:
-		// This is a unary minus
-		operand, err := p.handleExpr()
+		p.Unread()
+		um, err := p.handleUnaryMinus()
 		if err != nil {
-			return nil, fmt.Errorf(`failed to parse expression: %w`, err)
+			return nil, fmt.Errorf(`failed to parse unary minus: %w`, err)
 		}
-		expr = ast.NewUnaryOp("-", operand)
+		expr = um
 	case Literal:
 		expr = tok.Value
 	case Numeric:
@@ -599,6 +620,9 @@ func (p *parser) handleFunction() (*ast.Function, error) {
 	}
 
 	fn.Body(expr)
+
+	tok = p.Peek()
+	p.Unread()
 	return fn, nil
 }
 
@@ -670,7 +694,6 @@ func (p *parser) tryOperator(left interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '*': %w`, err)
 		}
-
 		ret = ast.NewBinaryOp("*", left, expr)
 	case Slash:
 		expr, err := p.handleExpr()
@@ -697,30 +720,52 @@ func (p *parser) tryOperator(left interface{}) (interface{}, error) {
 		}
 		ret = ast.NewBinaryOp("%", left, expr)
 	case OpenBracket:
-		expr, err := p.handleExpr()
+		p.Unread()
+		index, err := p.handleIndex(left)
 		if err != nil {
-			return nil, fmt.Errorf(`failed to parse index expression of '[]': %w`, err)
+			return nil, fmt.Errorf(`failed to parse index operator: %w`, err)
 		}
-
-		tok = p.Peek()
-		if tok.Type != CloseBracket {
-			return nil, fmt.Errorf(`expected close bracket, got %q`, tok.Value)
-		}
-		p.Advance()
-
-		// Only in this instance, we need to further, because we may
-		// have a list[expr] followed by another operator
-		expr2, err := p.tryOperator(ast.NewIndex(left, expr))
+		// ONLY in the case of an index operator, try one more time to
+		// match the next operator
+		nextop, err := p.tryOperator(index)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf(`failed to parse next operator after index: %w`, err)
 		}
-		ret = expr2
+		ret = nextop
 	default:
 		p.Unread()
 		return left, nil
 	}
 
-	return p.mungeOperatorPrecedence(ret), nil
+	ret = p.mungeOperatorPrecedence(ret)
+
+	return ret, nil
+}
+
+func (p *parser) handleIndex(left interface{}) (interface{}, error) {
+	for {
+		tok := p.Next()
+		if tok.Type != OpenBracket {
+			return nil, fmt.Errorf(`expected open bracket, got %q`, tok.Value)
+		}
+
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse index expression of '[]': %w`, err)
+		}
+
+		tok = p.Next()
+		if tok.Type != CloseBracket {
+			return nil, fmt.Errorf(`expected close bracket, got %q`, tok.Value)
+		}
+
+		left = ast.NewIndex(left, expr)
+		tok = p.Peek()
+		p.Unread()
+		if tok.Type != OpenBracket {
+			return left, nil
+		}
+	}
 }
 
 func (p *parser) handleForExpr() (*ast.ForExpr, error) {
@@ -768,10 +813,11 @@ func (p *parser) handleForPreamble() ([]*ast.LoopVar, error) {
 	// Multiple for variables can be specified, such as
 	// for (i=[0:1], j=foobar(), z=[1, 2, 3])
 	var loopVars []*ast.LoopVar
+OUTER:
 	for {
 		tok = p.Peek()
 		if tok.Type == CloseParen {
-			break
+			break OUTER
 		}
 		p.Unread()
 
@@ -784,6 +830,7 @@ func (p *parser) handleForPreamble() ([]*ast.LoopVar, error) {
 
 		tok = p.Peek()
 		if tok.Type == Comma {
+			p.Advance()
 			continue
 		}
 		p.Unread()
@@ -792,9 +839,30 @@ func (p *parser) handleForPreamble() ([]*ast.LoopVar, error) {
 }
 
 func (p *parser) handleForRange() (*ast.ForRange, error) {
-	tok := p.Next()
+	tok := p.Peek()
 	if tok.Type != OpenBracket {
+		p.Unread()
 		return nil, fmt.Errorf(`expected open bracket, got %q`, tok.Value)
+	}
+
+	// For various reasons, we go all the way until the end of range
+	// to look for a colon
+	count := 1
+	for {
+		count++
+		tok = p.Peek()
+		if tok.Type == EOF || tok.Type == CloseBracket {
+			for i := 0; i < count; i++ {
+				p.Unread()
+			}
+			return nil, fmt.Errorf(`range does not have colon`)
+		}
+		if tok.Type == Colon {
+			break
+		}
+	}
+	for i := 0; i < count-1; i++ {
+		p.Unread()
 	}
 
 	initExpr, err := p.handleExpr()
@@ -847,7 +915,7 @@ func (p *parser) handleForLoopVariable() (*ast.LoopVar, error) {
 
 	tok = p.Next()
 	if tok.Type != Equal {
-		return nil, fmt.Errorf(`expected equals, got %q`, tok.Value)
+		return nil, fmt.Errorf(`expected '=', got %q`, tok.Value)
 	}
 
 	// First, try a for range expression, if that fails, try expr
@@ -955,4 +1023,72 @@ func (p *parser) handleUse() (*ast.Use, error) {
 	}
 
 	return ast.NewUse(tok.Value), nil
+}
+func (p *parser) handleUnaryMinus() (interface{}, error) {
+	tok := p.Next()
+	if tok.Type != Minus {
+		return nil, fmt.Errorf(`expected '-', got %q`, tok.Value)
+	}
+
+	// -1, -var, -func(), -list[x]
+	tok = p.Peek()
+	switch tok.Type {
+	case Numeric:
+		p.Advance()
+		return ast.NewUnaryOp("-", tok.Value), nil
+	case Ident:
+		tok = p.Peek()
+		switch tok.Type {
+		case OpenParen:
+			p.Unread() // (
+			p.Unread() // ident
+			fn, _, err := p.handleCall()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse function call after unary minus: %w`, err)
+			}
+			return ast.NewUnaryOp("-", fn), nil
+		case OpenBracket:
+			p.Unread() // [
+			p.Unread() // ident
+			tok = p.Next()
+
+			index, err := p.handleIndex(ast.NewVariable(tok.Value))
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse index after unary minus: %w`, err)
+			}
+			return ast.NewUnaryOp("-", index), nil
+		default:
+			p.Unread()
+			p.Unread()
+			expr, err := p.handleExpr()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse expression after unary minus: %w`, err)
+			}
+
+			return p.bindUnaryToFirstTerm(expr)
+		}
+	default:
+		return nil, fmt.Errorf(`unexpected token %q after unary minus`, tok.Value)
+	}
+}
+
+func (p *parser) bindUnaryToFirstTerm(expr interface{}) (interface{}, error) {
+	// if the expression is either a binary or ternary operator
+	// take the first argument and bind to it
+	switch expr := expr.(type) {
+	case *ast.BinaryOp:
+		left, err := p.bindUnaryToFirstTerm(expr.Left())
+		if err != nil {
+			return nil, err
+		}
+		return ast.NewBinaryOp(expr.Op(), left, expr.Right()), nil
+	case *ast.TernaryOp:
+		cond, err := p.bindUnaryToFirstTerm(expr.Condition())
+		if err != nil {
+			return nil, err
+		}
+		return ast.NewTernaryOp(cond, expr.TrueExpr(), expr.FalseExpr()), nil
+	default:
+		return ast.NewUnaryOp("-", expr), nil
+	}
 }
