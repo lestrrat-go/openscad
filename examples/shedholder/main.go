@@ -10,6 +10,8 @@ import (
 	_ "github.com/lestrrat-go/openscad/examples/shedholder"
 )
 
+// Executing this as `go run main.go` will output the amalgamated OpenSCAD
+// code to generate the design.
 func main() {
 	if err := _main(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
