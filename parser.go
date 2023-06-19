@@ -1,12 +1,11 @@
-package parser
+package openscad
 
 import (
 	"fmt"
 	"log"
 	"strconv"
 
-	"github.com/lestrrat-go/openscad"
-	"github.com/lestrrat-go/openscad/dsl"
+	"github.com/lestrrat-go/openscad/ast"
 )
 
 type parser struct {
@@ -20,7 +19,7 @@ type parser struct {
 // afterwrads, programmatically.
 //
 // Currently comments are out of scope of this implementation.
-func Parse(src []byte) (openscad.Stmts, error) {
+func Parse(src []byte) (ast.Stmts, error) {
 	ch := make(chan *Token, 1)
 
 	go Lex(ch, src)
@@ -36,8 +35,8 @@ func Parse(src []byte) (openscad.Stmts, error) {
 	return stmts, nil
 }
 
-func (p *parser) handleStatements() (openscad.Stmts, error) {
-	var stmts openscad.Stmts
+func (p *parser) handleStatements() (ast.Stmts, error) {
+	var stmts ast.Stmts
 	for {
 		log.Printf("new loop in handle any")
 		tok := p.Peek()
@@ -168,7 +167,7 @@ func (p *parser) Next() *Token {
 	return nil
 }
 
-func (p *parser) handleModule() (*openscad.Module, error) {
+func (p *parser) handleModule() (*ast.Module, error) {
 	log.Printf("START module")
 	defer log.Printf("END module")
 	// module moduleName ( [... args ...]? ) { ... body ... }
@@ -179,7 +178,7 @@ func (p *parser) handleModule() (*openscad.Module, error) {
 
 	tok = p.Next()
 	moduleName := tok.Value
-	module := dsl.Module(moduleName)
+	module := ast.NewModule(moduleName)
 
 	params, err := p.handleParameterList()
 	if err != nil {
@@ -196,7 +195,7 @@ func (p *parser) handleModule() (*openscad.Module, error) {
 	return module, nil
 }
 
-func (p *parser) handleParameterList() ([]*openscad.Variable, error) {
+func (p *parser) handleParameterList() ([]*ast.Variable, error) {
 	log.Printf("START parameter list")
 	defer log.Printf("END parameter list")
 	tok := p.Next()
@@ -204,7 +203,7 @@ func (p *parser) handleParameterList() ([]*openscad.Variable, error) {
 		return nil, fmt.Errorf("expected open parenthesis")
 	}
 
-	var ret []*openscad.Variable
+	var ret []*ast.Variable
 
 OUTER:
 	for count := 1; ; count++ {
@@ -231,7 +230,7 @@ OUTER:
 	return ret, nil
 }
 
-func (p *parser) handleParamDecl() (*openscad.Variable, error) {
+func (p *parser) handleParamDecl() (*ast.Variable, error) {
 	log.Printf("START param decl")
 	defer log.Printf("END param decl")
 	tok := p.Next()
@@ -241,7 +240,7 @@ func (p *parser) handleParamDecl() (*openscad.Variable, error) {
 
 	name := tok.Value
 
-	v := dsl.Variable(name)
+	v := ast.NewVariable(name)
 
 	tok = p.Peek()
 	if tok.Type != Equal {
@@ -256,7 +255,7 @@ func (p *parser) handleParamDecl() (*openscad.Variable, error) {
 	return v, nil
 }
 
-func (p *parser) handleBlock() (openscad.Stmts, error) {
+func (p *parser) handleBlock() (ast.Stmts, error) {
 	log.Printf("START block")
 	defer log.Printf("END block")
 	tok := p.Next()
@@ -277,7 +276,7 @@ func (p *parser) handleBlock() (openscad.Stmts, error) {
 	return stmts, nil
 }
 
-func (p *parser) handleAssignment() (*openscad.Variable, error) {
+func (p *parser) handleAssignment() (*ast.Variable, error) {
 	log.Printf("START assignment")
 	defer log.Printf("END assignment")
 	tok := p.Next()
@@ -285,7 +284,7 @@ func (p *parser) handleAssignment() (*openscad.Variable, error) {
 		return nil, fmt.Errorf(`expected identity of variable to assign to, got %q`, tok.Value)
 	}
 	varName := tok.Value
-	v := dsl.Variable(varName)
+	v := ast.NewVariable(varName)
 	log.Printf("handleAssignment %#v", tok)
 
 	tok = p.Next()
@@ -303,7 +302,7 @@ func (p *parser) handleAssignment() (*openscad.Variable, error) {
 	return v, nil
 }
 
-func (p *parser) handleCall() (*openscad.Call, bool, error) {
+func (p *parser) handleCall() (*ast.Call, bool, error) {
 	log.Printf("START call")
 	defer log.Printf("END call")
 	tok := p.Next()
@@ -312,7 +311,7 @@ func (p *parser) handleCall() (*openscad.Call, bool, error) {
 	}
 
 	callName := tok.Value
-	call := dsl.Call(callName)
+	call := ast.NewCall(callName)
 
 	tok = p.Next()
 	if tok.Type != OpenParen {
@@ -397,7 +396,7 @@ func (p *parser) handleParenExpr() (ret interface{}, reterr error) {
 	if tok.Type != CloseParen {
 		return nil, fmt.Errorf(`expected close paren, got %#v`, tok)
 	}
-	return dsl.Group(expr), nil
+	return ast.NewGroup(expr), nil
 }
 
 func (p *parser) handleExpr() (ret interface{}, reterr error) {
@@ -441,7 +440,7 @@ func (p *parser) handleExpr() (ret interface{}, reterr error) {
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse expression: %w`, err)
 		}
-		expr = dsl.Negative(operand)
+		expr = ast.NewUnaryOp("-", operand)
 	case Literal:
 		expr = tok.Value
 	case Numeric:
@@ -457,7 +456,7 @@ func (p *parser) handleExpr() (ret interface{}, reterr error) {
 		if err == nil {
 			expr = stmt
 		} else {
-			expr = dsl.Variable(tok.Value)
+			expr = ast.NewVariable(tok.Value)
 		}
 	case OpenBracket:
 		// This is a list or a loop range
@@ -504,10 +503,10 @@ func (p *parser) handleTernary(cond interface{}) (interface{}, error) {
 		return nil, fmt.Errorf(`failed to parse false expression: %w`, err)
 	}
 
-	return dsl.Ternary(cond, trueExpr, falseExpr), nil
+	return ast.NewTernaryOp(cond, trueExpr, falseExpr), nil
 }
 
-func (p *parser) handleAssignmentOrFunctionCall() (openscad.Stmt, bool, error) {
+func (p *parser) handleAssignmentOrFunctionCall() (ast.Stmt, bool, error) {
 	tok := p.Peek()
 	if tok.Type != Ident {
 		return nil, false, fmt.Errorf(`expected ident, got %q`, tok.Value)
@@ -572,7 +571,7 @@ func (p *parser) handleList() ([]interface{}, error) {
 	return list, nil
 }
 
-func (p *parser) handleFunction() (*openscad.Function, error) {
+func (p *parser) handleFunction() (*ast.Function, error) {
 	tok := p.Next()
 	if tok.Type != Keyword && tok.Value != "function" {
 		return nil, fmt.Errorf(`expected function, got %q`, tok.Value)
@@ -584,7 +583,7 @@ func (p *parser) handleFunction() (*openscad.Function, error) {
 	}
 
 	name := tok.Value
-	fn := dsl.Function(name)
+	fn := ast.NewFunction(name)
 
 	tok = p.Next()
 	if tok.Type != OpenParen {
@@ -615,11 +614,11 @@ func (p *parser) handleFunction() (*openscad.Function, error) {
 		}
 	}
 
-	// TODO for functions, parameters need to be *openscad.Variable
-	vparams := make([]*openscad.Variable, len(parameters))
+	// TODO for functions, parameters need to be *Variable
+	vparams := make([]*ast.Variable, len(parameters))
 	for i, p := range parameters {
 		switch v := p.(type) {
-		case *openscad.Variable:
+		case *ast.Variable:
 			vparams[i] = v
 		default:
 			return nil, fmt.Errorf(`expected variable in function parameter, got %T`, p)
@@ -643,18 +642,18 @@ func (p *parser) handleFunction() (*openscad.Function, error) {
 }
 
 func (p *parser) mungeOperatorPrecedence(expr interface{}) interface{} {
-	bop, ok := expr.(*openscad.BinaryOp)
+	bop, ok := expr.(*ast.BinaryOp)
 	if !ok {
 		return expr
 	}
 
 	switch rop := bop.Right().(type) {
-	case *openscad.BinaryOp:
+	case *ast.BinaryOp:
 		return bop.Rearrange(rop)
-	case *openscad.TernaryOp:
+	case *ast.TernaryOp:
 		// Take the condition of the ternary op, and make it the right hand side
-		return openscad.NewTernaryOp(
-			openscad.NewBinaryOp(bop.Op(), bop.Left(), rop.Condition()),
+		return ast.NewTernaryOp(
+			ast.NewBinaryOp(bop.Op(), bop.Left(), rop.Condition()),
 			rop.TrueExpr(),
 			rop.FalseExpr(),
 		)
@@ -680,62 +679,62 @@ func (p *parser) tryOperator(left interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '==': %w`, err)
 		}
-		ret = dsl.EQ(left, expr)
+		ret = ast.NewBinaryOp("==", left, expr)
 	case LessThan:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '<': %w`, err)
 		}
-		ret = dsl.LT(left, expr)
+		ret = ast.NewBinaryOp(">", left, expr)
 	case LessThanEqual:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '<=': %w`, err)
 		}
-		ret = dsl.LE(left, expr)
+		ret = ast.NewBinaryOp(">=", left, expr)
 	case GreaterThan:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '>': %w`, err)
 		}
-		ret = dsl.GT(left, expr)
+		ret = ast.NewBinaryOp(">", left, expr)
 	case GreaterThanEqual:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '>=': %w`, err)
 		}
-		ret = dsl.GE(left, expr)
+		ret = ast.NewBinaryOp(">=", left, expr)
 	case Asterisk:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '*': %w`, err)
 		}
 
-		ret = dsl.Mul(left, expr)
+		ret = ast.NewBinaryOp("*", left, expr)
 	case Slash:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '/': %w`, err)
 		}
-		ret = dsl.Div(left, expr)
+		ret = ast.NewBinaryOp("/", left, expr)
 	case Plus:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '+': %w`, err)
 		}
-		ret = dsl.Add(left, expr)
+		ret = ast.NewBinaryOp("+", left, expr)
 	case Minus:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '-': %w`, err)
 		}
-		ret = dsl.Sub(left, expr)
+		ret = ast.NewBinaryOp("-", left, expr)
 	case Percent:
 		expr, err := p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '%%': %w`, err)
 		}
-		ret = dsl.Mod(left, expr)
+		ret = ast.NewBinaryOp("%", left, expr)
 	case OpenBracket:
 		expr, err := p.handleExpr()
 		if err != nil {
@@ -750,7 +749,7 @@ func (p *parser) tryOperator(left interface{}) (interface{}, error) {
 
 		// Only in this instance, we need to further, because we may
 		// have a list[expr] followed by another operator
-		expr2, err := p.tryOperator(dsl.Index(left, expr))
+		expr2, err := p.tryOperator(ast.NewIndex(left, expr))
 		if err != nil {
 			return nil, err
 		}
@@ -764,13 +763,13 @@ func (p *parser) tryOperator(left interface{}) (interface{}, error) {
 	return p.mungeOperatorPrecedence(ret), nil
 }
 
-func (p *parser) handleForExpr() (*openscad.ForExpr, error) {
+func (p *parser) handleForExpr() (*ast.ForExpr, error) {
 	loopVars, err := p.handleForPreamble()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse for loop preamble: %w`, err)
 	}
 
-	forExpr := dsl.ForExpr(loopVars...)
+	forExpr := ast.NewForExpr(loopVars)
 	expr, err := p.handleExpr()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse for expression: %w`, err)
@@ -779,13 +778,13 @@ func (p *parser) handleForExpr() (*openscad.ForExpr, error) {
 	return forExpr, nil
 }
 
-func (p *parser) handleForBlock() (*openscad.ForBlock, error) {
+func (p *parser) handleForBlock() (*ast.ForBlock, error) {
 	loopVars, err := p.handleForPreamble()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse for loop preamble: %w`, err)
 	}
 
-	forStmt := dsl.For(loopVars...)
+	forStmt := ast.NewFor(loopVars)
 	stmts, err := p.handleBlock()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse for block: %w`, err)
@@ -795,7 +794,7 @@ func (p *parser) handleForBlock() (*openscad.ForBlock, error) {
 	return forStmt, nil
 }
 
-func (p *parser) handleForPreamble() ([]*openscad.LoopVar, error) {
+func (p *parser) handleForPreamble() ([]*ast.LoopVar, error) {
 	tok := p.Next()
 	if tok.Type != Keyword || tok.Value != "for" {
 		return nil, fmt.Errorf(`expected for, got %q`, tok.Value)
@@ -808,7 +807,7 @@ func (p *parser) handleForPreamble() ([]*openscad.LoopVar, error) {
 
 	// Multiple for variables can be specified, such as
 	// for (i=[0:1], j=foobar(), z=[1, 2, 3])
-	var loopVars []*openscad.LoopVar
+	var loopVars []*ast.LoopVar
 	for {
 		tok = p.Peek()
 		if tok.Type == CloseParen {
@@ -832,7 +831,7 @@ func (p *parser) handleForPreamble() ([]*openscad.LoopVar, error) {
 	return loopVars, nil
 }
 
-func (p *parser) handleForRange() (*openscad.ForRange, error) {
+func (p *parser) handleForRange() (*ast.ForRange, error) {
 	log.Printf("START handleForRange")
 	defer log.Printf("END handleForRange")
 	tok := p.Next()
@@ -873,20 +872,20 @@ func (p *parser) handleForRange() (*openscad.ForRange, error) {
 		return nil, fmt.Errorf(`expected close bracket, got %q`, tok.Value)
 	}
 
-	fr := dsl.ForRange(initExpr, endExpr)
+	fr := ast.NewForRange(initExpr, endExpr)
 	if stepExpr != nil {
 		fr.Increment(stepExpr)
 	}
 	return fr, nil
 }
 
-func (p *parser) handleForLoopVariable() (*openscad.LoopVar, error) {
+func (p *parser) handleForLoopVariable() (*ast.LoopVar, error) {
 	tok := p.Next()
 	if tok.Type != Ident {
 		return nil, fmt.Errorf(`expected loop variable identifier, got %q`, tok.Value)
 	}
 
-	variable := dsl.Variable(tok.Value)
+	variable := ast.NewVariable(tok.Value)
 
 	tok = p.Next()
 	if tok.Type != Equal {
@@ -906,15 +905,15 @@ func (p *parser) handleForLoopVariable() (*openscad.LoopVar, error) {
 		}
 		frexpr = expr
 	}
-	return dsl.LoopVar(variable, frexpr), nil
+	return ast.NewLoopVar(variable, frexpr), nil
 }
 
-func (p *parser) handleLetExpr() (*openscad.LetExpr, error) {
+func (p *parser) handleLetExpr() (*ast.LetExpr, error) {
 	vars, err := p.handleLetPreamble()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse let preamble: %w`, err)
 	}
-	letExpr := dsl.LetExpr(vars...)
+	letExpr := ast.NewLetExpr(vars...)
 	expr, err := p.handleExpr()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse let expression: %w`, err)
@@ -923,12 +922,12 @@ func (p *parser) handleLetExpr() (*openscad.LetExpr, error) {
 	return letExpr, nil
 }
 
-func (p *parser) handleLetBlock() (*openscad.LetBlock, error) {
+func (p *parser) handleLetBlock() (*ast.LetBlock, error) {
 	vars, err := p.handleLetPreamble()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse let preamble: %w`, err)
 	}
-	letBlock := dsl.LetBlock(vars...)
+	letBlock := ast.NewLetBlock(vars...)
 	stmts, err := p.handleBlock()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse let block: %w`, err)
@@ -937,7 +936,7 @@ func (p *parser) handleLetBlock() (*openscad.LetBlock, error) {
 	return letBlock, nil
 }
 
-func (p *parser) handleLetPreamble() ([]*openscad.Variable, error) {
+func (p *parser) handleLetPreamble() ([]*ast.Variable, error) {
 	tok := p.Next()
 	if tok.Type != Keyword || tok.Value != "let" {
 		return nil, fmt.Errorf(`expected let, got %q`, tok.Value)
@@ -949,7 +948,7 @@ func (p *parser) handleLetPreamble() ([]*openscad.Variable, error) {
 	}
 
 	// Multiple variables can be declared
-	var letVars []*openscad.Variable
+	var letVars []*ast.Variable
 	for {
 		tok = p.Peek()
 		if tok.Type == CloseParen {
@@ -973,7 +972,7 @@ func (p *parser) handleLetPreamble() ([]*openscad.Variable, error) {
 	return letVars, nil
 }
 
-func (p *parser) handleInclude() (*openscad.Include, error) {
+func (p *parser) handleInclude() (*ast.Include, error) {
 	log.Printf("START include")
 	defer log.Printf("END include")
 	tok := p.Next()
@@ -986,10 +985,10 @@ func (p *parser) handleInclude() (*openscad.Include, error) {
 		return nil, fmt.Errorf(`expected string, got %q`, tok.Value)
 	}
 
-	return dsl.Include(tok.Value), nil
+	return ast.NewInclude(tok.Value), nil
 }
 
-func (p *parser) handleUse() (*openscad.Use, error) {
+func (p *parser) handleUse() (*ast.Use, error) {
 	tok := p.Next()
 	if tok.Type != Keyword || tok.Value != "use" {
 		return nil, fmt.Errorf(`expected use, got %q`, tok.Value)
@@ -1000,5 +999,5 @@ func (p *parser) handleUse() (*openscad.Use, error) {
 		return nil, fmt.Errorf(`expected string, got %q`, tok.Value)
 	}
 
-	return dsl.Use(tok.Value), nil
+	return ast.NewUse(tok.Value), nil
 }

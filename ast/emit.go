@@ -1,4 +1,4 @@
-package openscad
+package ast
 
 import (
 	"bytes"
@@ -8,6 +8,114 @@ import (
 	"path/filepath"
 	"reflect"
 )
+
+const (
+	asNone = iota
+	asExpr
+	asStmt
+)
+
+// EmitContext holds the context for emitting OpenSCAD code.
+// The object is immutable once created. To change the values,
+// create a new context using one of the provided methods
+type EmitContext struct {
+	amalgamated     map[string]struct{}
+	registry        *Registry
+	indent          string
+	as              int
+	allowAssignment bool
+	amalgamate      bool
+	nestedBinaryOp  bool
+}
+
+func newEmitContext() *EmitContext {
+	return &EmitContext{
+		allowAssignment: true,
+		registry:        globalRegistry,
+	}
+}
+
+func (e *EmitContext) Amalgamate() bool {
+	return e.amalgamate
+}
+
+func (e *EmitContext) Copy() *EmitContext {
+	return &EmitContext{
+		indent:          e.indent,
+		amalgamate:      e.amalgamate,
+		amalgamated:     e.amalgamated,
+		registry:        e.registry,
+		as:              e.as,
+		allowAssignment: e.allowAssignment,
+		nestedBinaryOp:  e.nestedBinaryOp,
+	}
+}
+
+func (e *EmitContext) ForceExpr() *EmitContext {
+	e2 := e.Copy()
+	e2.as = asExpr
+	return e2
+}
+
+func (e *EmitContext) ForceStmt() *EmitContext {
+	e2 := e.Copy()
+	e2.as = asStmt
+	return e2
+}
+
+func (e *EmitContext) AsExpr() bool {
+	return e.as == asExpr
+}
+
+func (e *EmitContext) AsStmt() bool {
+	return e.as == asStmt
+}
+
+func (e *EmitContext) AllowAssignment() bool {
+	return e.allowAssignment
+}
+
+func (e *EmitContext) IsNestedBinaryOp() bool {
+	return e.nestedBinaryOp
+}
+
+func (e *EmitContext) Indent() string {
+	return e.indent
+}
+
+func (e *EmitContext) WithIndent(indent string) *EmitContext {
+	e2 := e.Copy()
+	e2.indent = indent
+	return e2
+}
+
+func (e *EmitContext) WithAllowAssignment(allowAssignment bool) *EmitContext {
+	e2 := e.Copy()
+	e2.allowAssignment = allowAssignment
+	return e2
+}
+
+func (e *EmitContext) WithNestedBinaryOp(v bool) *EmitContext {
+	e2 := e.Copy()
+	e2.nestedBinaryOp = v
+	return e2
+}
+
+const indent = "  "
+
+func (e *EmitContext) IncrIndent() *EmitContext {
+	return e.WithIndent(e.indent + indent)
+}
+
+func (e *EmitContext) DecrIndent() *EmitContext {
+	if e.indent == "" {
+		return e
+	}
+	if len(e.indent) < len(indent) {
+		return e.WithIndent("")
+	}
+	return e.WithIndent(e.indent[:len(e.indent)-len(indent)])
+}
 
 func EmitFile(filename string, w io.Writer, options ...EmitFileOption) error {
 	registry := globalRegistry

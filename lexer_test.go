@@ -1,9 +1,9 @@
-package parser_test
+package openscad_test
 
 import (
 	"testing"
 
-	"github.com/lestrrat-go/openscad/parser"
+	"github.com/lestrrat-go/openscad"
 )
 
 func TestLexer(t *testing.T) {
@@ -13,8 +13,8 @@ module foo(a, b, c=0) {
 }
 `
 
-	ch := make(chan *parser.Token, 1)
-	go parser.Lex(ch, []byte(src))
+	ch := make(chan *openscad.Token, 1)
+	go openscad.Lex(ch, []byte(src))
 
 	for tok := range ch {
 		t.Logf("%#v", tok)

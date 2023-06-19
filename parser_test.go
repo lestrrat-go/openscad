@@ -1,4 +1,4 @@
-package parser_test
+package openscad_test
 
 import (
 	"log"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-go/openscad"
-	"github.com/lestrrat-go/openscad/parser"
+	"github.com/lestrrat-go/openscad/ast"
 )
 
 func TestParser(t *testing.T) {
@@ -44,21 +44,8 @@ translate([1, 2, 3]) {
 
 
 `
-	stmts, err := parser.Parse([]byte(src))
+	stmts, err := openscad.Parse([]byte(src))
 	log.Printf("%s", err)
 	log.Printf("%#v", stmts)
-	openscad.Emit(stmts, os.Stdout)
-}
-
-func TestThreads(t *testing.T) {
-	src, err := os.ReadFile("testdata/threads.scad")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stmts, err := parser.Parse(src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	openscad.Emit(stmts, os.Stdout)
+	ast.Emit(stmts, os.Stdout)
 }
