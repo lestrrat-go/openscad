@@ -670,7 +670,7 @@ func (p *parser) tryOperator(left interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse right hand expression of '<': %w`, err)
 		}
-		ret = ast.NewBinaryOp(">", left, expr)
+		ret = ast.NewBinaryOp("<", left, expr)
 	case LessThanEqual:
 		expr, err := p.handleExpr()
 		if err != nil {
