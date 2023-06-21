@@ -210,7 +210,9 @@ func (f *ForBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if err := emitForDecl(ctx, w, f.loopVars); err != nil {
 		return err
 	}
-	emitChildren(ctx, w, f.children, true)
+	if err := emitChildren(ctx, w, f.children, true); err != nil {
+		return fmt.Errorf(`failed to emit for block children: %w`, err)
+	}
 	return nil
 }
 

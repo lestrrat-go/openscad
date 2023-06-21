@@ -64,10 +64,7 @@ func (stmts *Stmts) Add(stmt Stmt) {
 
 func (stmts Stmts) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	ctx = ctx.WithAllowAssignment(true)
-	for i, stmt := range stmts {
-		if i > 0 {
-			fmt.Fprintf(w, "\n")
-		}
+	for _, stmt := range stmts {
 		if err := stmt.EmitStmt(ctx, w); err != nil {
 			return err
 		}
@@ -138,7 +135,7 @@ func (p *Variable) EmitExpr(ctx *EmitContext, w io.Writer) error {
 }
 
 func (p *Variable) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprint(w, ctx.Indent())
+	fmt.Fprintf(w, "\n%s", ctx.Indent())
 	if err := p.EmitExpr(ctx.WithAllowAssignment(true), w); err != nil {
 		return err
 	}
@@ -230,6 +227,7 @@ func (m *Module) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if err := emitChildren(ctx, w, m.children, true); err != nil {
 		return err
 	}
+	fmt.Fprint(w, "\n")
 	return nil
 }
 

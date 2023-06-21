@@ -1035,7 +1035,11 @@ func (p *parser) handleUnaryMinus() (interface{}, error) {
 	switch tok.Type {
 	case Numeric:
 		p.Advance()
-		return ast.NewUnaryOp("-", tok.Value), nil
+		f, err := strconv.ParseFloat(tok.Value, 64)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse numeric literal %q: %w`, tok.Value, err)
+		}
+		return ast.NewUnaryOp("-", f), nil
 	case Ident:
 		tok = p.Peek()
 		switch tok.Type {

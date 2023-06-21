@@ -32,11 +32,11 @@ func (f *Function) Body(body interface{}) *Function {
 }
 
 func (f *Function) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprintf(w, `%s`, ctx.Indent())
+	fmt.Fprintf(w, "\n%s", ctx.Indent())
 	if err := f.EmitExpr(ctx, w); err != nil {
 		return err
 	}
-	fmt.Fprint(w, `;`)
+	fmt.Fprint(w, ";\n")
 	return nil
 }
 
@@ -57,6 +57,8 @@ func (f *Function) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	if f.body == nil {
 		return fmt.Errorf(`expected a body`)
 	}
+	ctx = ctx.IncrIndent()
+	fmt.Fprintf(w, "\n%s", ctx.Indent())
 	return emitExpr(ctx, w, f.body)
 }
 
