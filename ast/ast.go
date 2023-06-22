@@ -121,9 +121,17 @@ func (p *Variable) Value(v interface{}) *Variable {
 	return p
 }
 
-func (p *Variable) EmitExpr(ctx *EmitContext, w io.Writer) error {
+func (p *Variable) emit(ctx *EmitContext, w io.Writer, isStmt bool) error {
+	// This may seem a bit weird, but we want to change the formatting
+	// based on if this is a declaration+assignment, or parameter in a
+	// function call. The variable is used as statement in the former,
+	// and an expression in later
+	spacing := ""
+	if isStmt {
+		spacing = " "
+	}
 	if ctx.AllowAssignment() && p.value != nil {
-		fmt.Fprintf(w, `%s=`, p.name)
+		fmt.Fprintf(w, `%[1]s%[2]s=%[2]s`, p.name, spacing)
 		// Remove the assignment flag
 		if err := emitExpr(ctx.WithAllowAssignment(false), w, p.value); err != nil {
 			return err
@@ -134,9 +142,14 @@ func (p *Variable) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	return nil
 }
 
+func (p *Variable) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	p.emit(ctx, w, false)
+	return nil
+}
+
 func (p *Variable) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprintf(w, "\n%s", ctx.Indent())
-	if err := p.EmitExpr(ctx.WithAllowAssignment(true), w); err != nil {
+	if err := p.emit(ctx.WithAllowAssignment(true), w, true); err != nil {
 		return err
 	}
 	fmt.Fprint(w, `;`)
