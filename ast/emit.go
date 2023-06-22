@@ -224,14 +224,30 @@ func emitAny(ctx *EmitContext, w io.Writer, v interface{}) error {
 	switch rv.Kind() {
 	case reflect.Slice:
 		fmt.Fprint(w, "[")
+		// if this contains more than 3 elements, we'll put each on a separate line
+		separateLine := rv.Len() > 3
+		octx := ctx
+		if separateLine {
+			ctx = ctx.IncrIndent()
+		}
 		for i := 0; i < rv.Len(); i++ {
 			if i > 0 {
 				fmt.Fprintf(w, ", ")
+			}
+			if separateLine {
+				fmt.Fprintln(w)
+				fmt.Fprint(w, ctx.Indent())
 			}
 			if err := emitValue(ctx, w, rv.Index(i).Interface()); err != nil {
 				return err
 			}
 		}
+		ctx = octx
+		if separateLine {
+			fmt.Fprintln(w)
+			fmt.Fprint(w, ctx.Indent())
+		}
+
 		fmt.Fprint(w, "]")
 	default:
 		_, err := fmt.Fprintf(w, "%#v", v)
