@@ -14,6 +14,8 @@ var forKeyword = []byte(`for`)
 var letKeyword = []byte(`let`)
 var includeKeyword = []byte(`include`)
 var useKeyword = []byte(`use`)
+var ifKeyword = []byte(`if`)
+var elseKeyword = []byte(`else`)
 
 const (
 	plus         = '+'
@@ -36,6 +38,7 @@ const (
 	greaterThan  = '>'
 	question     = '?'
 	percent      = '%'
+	ampersand    = '&'
 )
 const (
 	EOF = iota
@@ -66,6 +69,8 @@ const (
 	CloseBrace   // }
 	Percent
 	Sharp
+	And
+	BitwiseAnd
 )
 
 type Token struct {
@@ -85,7 +90,7 @@ func (l *lexer) skipWhiteSpaces() {
 		r := l.peek()
 		if !unicode.IsSpace(r) {
 			l.unread()
-			break
+			return
 		}
 		l.advance()
 	}
@@ -144,6 +149,12 @@ func Lex(ch chan *Token, src []byte) {
 
 		peeked := l.peek()
 		switch peeked {
+		case ampersand:
+			if l.peek() == ampersand {
+				l.emitBuffer(And)
+			} else {
+				l.emitBuffer(BitwiseAnd)
+			}
 		case comma:
 			l.emitBuffer(Comma)
 		case equal:
@@ -253,9 +264,16 @@ func Lex(ch chan *Token, src []byte) {
 		switch peeked {
 		case 'i':
 			l.unread()
-			if err := l.expect(Keyword, includeKeyword); err == nil {
-				inInclude = true
-			} else {
+			if err := l.expect(Keyword, ifKeyword); err != nil {
+				if err := l.expect(Keyword, includeKeyword); err == nil {
+					inInclude = true
+				} else {
+					found = false
+				}
+			}
+		case 'e':
+			l.unread()
+			if err := l.expect(Keyword, elseKeyword); err != nil {
 				found = false
 			}
 		case 'u':

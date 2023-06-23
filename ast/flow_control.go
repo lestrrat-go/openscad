@@ -383,3 +383,127 @@ func (op *TernaryOp) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprint(w, `;`)
 	return nil
 }
+
+func emitIfPreamble(ctx *EmitContext, w io.Writer, cond interface{}) error {
+	var buf bytes.Buffer
+
+	fmt.Fprintf(&buf, "if (")
+	if err := emitExpr(ctx, &buf, cond); err != nil {
+		return fmt.Errorf(`failed to emit if condition: %w`, err)
+	}
+	if strings.ContainsRune(buf.String(), '\n') {
+		if err := addIndent(w, &buf, ctx.Indent()+singleIndent); err != nil {
+			return fmt.Errorf(`failed to write if condition: %w`, err)
+		}
+		fmt.Fprintf(w, "\n)")
+	} else {
+		if _, err := buf.WriteTo(w); err != nil {
+			return fmt.Errorf(`failed to write if condition: %w`, err)
+		}
+		fmt.Fprintf(w, ")")
+	}
+	return nil
+}
+
+type IfExpr struct {
+	cond interface{}
+	body interface{}
+}
+
+func NewIfExpr(cond interface{}) *IfExpr {
+	return &IfExpr{
+		cond: cond,
+	}
+}
+
+func (ib *IfExpr) Body(body interface{}) *IfExpr {
+	ib.body = body
+	return ib
+}
+
+func (ib *IfExpr) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	if err := emitIfPreamble(ctx, w, ib.cond); err != nil {
+		return err
+	}
+	if err := emitExpr(ctx, w, ib.body); err != nil {
+		return fmt.Errorf(`failed to emit if body: %w`, err)
+	}
+	return nil
+}
+
+type IfStmt struct {
+	cond         interface{}
+	body         []Stmt
+	elseifBlocks []*ElseIfStmt
+	elseBlock    []Stmt
+}
+
+func NewIfStmt(cond interface{}) *IfStmt {
+	return &IfStmt{
+		cond: cond,
+	}
+}
+
+func (ib *IfStmt) Body(stmts ...Stmt) *IfStmt {
+	ib.body = make([]Stmt, len(stmts))
+	copy(ib.body, stmts)
+	return ib
+}
+
+func (ib *IfStmt) AddElseIf(cond interface{}, stmts ...Stmt) *IfStmt {
+	ib.elseifBlocks = append(ib.elseifBlocks, &ElseIfStmt{
+		cond: cond,
+		body: stmts,
+	})
+	return ib
+}
+
+func (ib *IfStmt) Else(stmts ...Stmt) *IfStmt {
+	ib.elseBlock = make([]Stmt, len(stmts))
+	copy(ib.elseBlock, stmts)
+	return ib
+}
+
+func (ib *IfStmt) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, "\n%s", ctx.Indent())
+
+	if err := emitIfPreamble(ctx, w, ib.cond); err != nil {
+		return fmt.Errorf(`failed to emit if preamble: %w`, err)
+	}
+
+	if err := emitChildren(ctx, w, ib.body, false); err != nil {
+		return fmt.Errorf(`failed to emit if true block: %w`, err)
+	}
+
+	for _, elseifBlock := range ib.elseifBlocks {
+		if err := elseifBlock.EmitStmt(ctx, w); err != nil {
+			return fmt.Errorf(`failed to emit elseif block: %w`, err)
+		}
+	}
+
+	if ib.elseBlock != nil {
+		fmt.Fprintf(w, "\n%selse", ctx.Indent())
+		if err := emitChildren(ctx, w, ib.elseBlock, false); err != nil {
+			return fmt.Errorf(`failed to emit if false block: %w`, err)
+		}
+	}
+
+	return nil
+}
+
+type ElseIfStmt struct {
+	cond interface{}
+	body []Stmt
+}
+
+func (eb *ElseIfStmt) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, "\n%selse if (", ctx.Indent())
+	if err := emitExpr(ctx, w, eb.cond); err != nil {
+		return fmt.Errorf(`failed to emit else if condition: %w`, err)
+	}
+	fmt.Fprintf(w, ")")
+	if err := emitChildren(ctx, w, eb.body, false); err != nil {
+		return fmt.Errorf(`failed to emit else if block: %w`, err)
+	}
+	return nil
+}

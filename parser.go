@@ -68,6 +68,9 @@ func (p *parser) handleStatement() (ast.Stmt, error) {
 	switch tok.Type {
 	case Keyword:
 		switch tok.Value {
+		case "if":
+			p.Unread()
+			return p.handleIfStmt()
 		case "include":
 			p.Unread()
 			return p.handleInclude()
@@ -99,7 +102,7 @@ func (p *parser) handleStatement() (ast.Stmt, error) {
 		}
 	case Ident:
 		p.Unread()
-		stmt, semicolon, err := p.handleAssignmentOrFunctionCall()
+		stmt, semicolon, err := p.handleAssignmentOrFunctionCall(false)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +119,8 @@ func (p *parser) handleStatement() (ast.Stmt, error) {
 		return p.handleBlock()
 	default:
 		p.Unread()
-		return nil, fmt.Errorf(`unhandled token %q`, tok.Value)
+		panic("HERE")
+		return nil, fmt.Errorf(`statement: unhandled token %q`, tok.Value)
 	}
 	return nil, fmt.Errorf(`unreachable: %#v`, tok)
 }
@@ -270,17 +274,25 @@ func (p *parser) handleParamDecl() (*ast.Variable, error) {
 func (p *parser) handleBlock() (ast.Stmts, error) {
 	tok := p.Next()
 	if tok.Type != OpenBrace {
-		return nil, fmt.Errorf(`expected open brace, got %q`, tok.Value)
+		return nil, fmt.Errorf(`block: expected open brace, got %q`, tok.Value)
 	}
 
 	stmts, err := p.handleStatements()
 	if err != nil {
-		return nil, fmt.Errorf(`failed to parse block statements: %w`, err)
+		return nil, fmt.Errorf(`block: failed to parse block statements: %w`, err)
 	}
 
 	tok = p.Next()
 	if tok.Type != CloseBrace {
-		return nil, fmt.Errorf(`expected close brace, got %q`, tok.Value)
+		return nil, fmt.Errorf(`block: expected close brace, got %q`, tok.Value)
+	}
+
+	// optional semicolons allowed
+	tok = p.Peek()
+	if tok.Type == Semicolon {
+		p.Advance()
+	} else {
+		p.Unread()
 	}
 	return stmts, nil
 }
@@ -333,7 +345,7 @@ OUTER:
 
 		expr, err := p.handleExpr()
 		if err != nil {
-			return nil, false, fmt.Errorf(`failed to parse expression in parameter list for function call %q: %w`, callName, err)
+			return nil, false, fmt.Errorf(`function %q: failed to parse expression in parameter list: %w`, callName, err)
 		}
 		parameters = append(parameters, expr)
 
@@ -356,7 +368,7 @@ OUTER:
 		p.Unread()
 		stmts, err := p.handleBlock()
 		if err != nil {
-			return nil, false, fmt.Errorf(`failed to parse function block: %w`, err)
+			return nil, false, fmt.Errorf(`function %q: failed to parse function block: %w`, callName, err)
 		}
 		call.Add(stmts...)
 		semicolon = false
@@ -365,7 +377,7 @@ OUTER:
 		p.Unread()
 		child, childsemicolon, err := p.handleCall()
 		if err != nil {
-			return nil, false, fmt.Errorf(`failed to parse child function call: %w`, err)
+			return nil, false, fmt.Errorf(`function %q: failed to parse child function call: %w`, callName, err)
 		}
 		call.Add(child)
 		semicolon = childsemicolon
@@ -373,12 +385,12 @@ OUTER:
 		p.Unread()
 		// Allow for block after a funciton call()
 		if tok.Value != "for" {
-			return nil, false, fmt.Errorf(`unexpected keyword %q`, tok.Value)
+			return nil, false, fmt.Errorf(`function %q: unexpected keyword %q`, callName, tok.Value)
 		}
 
 		forBlock, err := p.handleForBlock()
 		if err != nil {
-			return nil, false, fmt.Errorf(`failed to parse for block: %w`, err)
+			return nil, false, fmt.Errorf(`function %q: failed to parse function body: %w`, callName, err)
 		}
 		call.Add(forBlock)
 		semicolon = false
@@ -425,9 +437,15 @@ func (p *parser) handleExpr() (ret interface{}, reterr error) {
 		case "for":
 			fe, err := p.handleForExpr()
 			if err != nil {
-				return nil, fmt.Errorf(`failed to parse for expression: %w`, err)
+				return nil, fmt.Errorf(`failed to parse expression: %w`, err)
 			}
 			expr = fe
+		case "if":
+			ie, err := p.handleIfExpr()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse expression: %w`, err)
+			}
+			expr = ie
 		default:
 			return nil, fmt.Errorf(`unexpected keyword %q`, tok.Value)
 		}
@@ -456,7 +474,7 @@ func (p *parser) handleExpr() (ret interface{}, reterr error) {
 	case Ident:
 		p.Unread()
 		// could be a function call, or just a variable
-		stmt, _, err := p.handleAssignmentOrFunctionCall()
+		stmt, _, err := p.handleAssignmentOrFunctionCall(true)
 		if err == nil {
 			expr = stmt
 		} else {
@@ -508,11 +526,12 @@ func (p *parser) handleTernary(cond interface{}) (interface{}, error) {
 	return ast.NewTernaryOp(cond, trueExpr, falseExpr), nil
 }
 
-func (p *parser) handleAssignmentOrFunctionCall() (ast.Stmt, bool, error) {
+func (p *parser) handleAssignmentOrFunctionCall(eval bool) (ast.Stmt, bool, error) {
 	tok := p.Peek()
 	if tok.Type != Ident {
 		return nil, false, fmt.Errorf(`expected ident, got %q`, tok.Value)
 	}
+	name := tok.Value
 
 	tok = p.Peek()
 	switch tok.Type {
@@ -534,6 +553,11 @@ func (p *parser) handleAssignmentOrFunctionCall() (ast.Stmt, bool, error) {
 		return call, semicolon, nil
 	default:
 		p.Unread()
+		if eval {
+			// if we're in the middle of some expression to evaluate the value of a var,
+			// we can have a standalone ident
+			return ast.NewVariable(name), false, nil
+		}
 		return nil, false, fmt.Errorf(`expected assignment or function call, got %q after ident`, tok.Value)
 	}
 }
@@ -667,6 +691,12 @@ func (p *parser) tryOperator(left interface{}) (interface{}, error) {
 	tok := p.Peek()
 	var ret interface{}
 	switch tok.Type {
+	case And:
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse right hand expression of '&&': %w`, err)
+		}
+		ret = ast.NewBinaryOp("&&", left, expr)
 	case Question:
 		p.Unread()
 		ternary, err := p.handleTernary(left)
@@ -1055,6 +1085,18 @@ func (p *parser) handleUnaryMinus() (interface{}, error) {
 			return nil, fmt.Errorf(`failed to parse numeric literal %q: %w`, tok.Value, err)
 		}
 		return ast.NewUnaryOp("-", f), nil
+	case OpenParen:
+		// -(expr)
+		p.Advance()
+		expr, err := p.handleExpr()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse group expression after unary minus: %w`, err)
+		}
+		tok = p.Next()
+		if tok.Type != CloseParen {
+			return nil, fmt.Errorf(`expected ')', got %q`, tok.Value)
+		}
+		return ast.NewUnaryOp("-", ast.NewGroup(expr)), nil
 	case Ident:
 		tok = p.Peek()
 		switch tok.Type {
@@ -1110,4 +1152,119 @@ func (p *parser) bindUnaryToFirstTerm(expr interface{}) (interface{}, error) {
 	default:
 		return ast.NewUnaryOp("-", expr), nil
 	}
+}
+
+func (p *parser) handleIfPreamble() (interface{}, error) {
+	tok := p.Next()
+	if tok.Type != Keyword || tok.Value != "if" {
+		return nil, fmt.Errorf(`expected if, got %q`, tok.Value)
+	}
+
+	tok = p.Next()
+	if tok.Type != OpenParen {
+		return nil, fmt.Errorf(`expected open paren, got %q`, tok.Value)
+	}
+
+	cond, err := p.handleExpr()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse if condition: %w`, err)
+	}
+
+	tok = p.Next()
+	if tok.Type != CloseParen {
+		return nil, fmt.Errorf(`expected close paren, got %q`, tok.Value)
+	}
+
+	return cond, nil
+}
+
+func (p *parser) handleIfExpr() (*ast.IfExpr, error) {
+	cond, err := p.handleIfPreamble()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse if preamble: %w`, err)
+	}
+	ifBlock := ast.NewIfExpr(cond)
+
+	expr, err := p.handleExpr()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse if expression: %w`, err)
+	}
+	ifBlock.Body(expr)
+	return ifBlock, nil
+}
+
+func (p *parser) handleIfChildBlock() ([]ast.Stmt, error) {
+	tok := p.Peek()
+	p.Unread()
+
+	if tok.Type == OpenBrace {
+		block, err := p.handleBlock()
+		if err != nil {
+			return nil, fmt.Errorf(`failed to parse if block: %w`, err)
+		}
+		return block, nil
+	}
+
+	stmt, err := p.handleStatement()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse if statement: %w`, err)
+	}
+	return []ast.Stmt{stmt}, nil
+}
+
+func (p *parser) handleIfStmt() (ast.Stmt, error) {
+	cond, err := p.handleIfPreamble()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse if preamble: %w`, err)
+	}
+	ifBlock := ast.NewIfStmt(cond)
+
+	stmts, err := p.handleIfChildBlock()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to parse if block: %w`, err)
+	}
+	if len(stmts) == 0 {
+		return nil, fmt.Errorf(`expected if block to contain at least one statement`)
+	}
+	ifBlock.Body(stmts...)
+
+	// else if (cond) { BLOCK } or else { BLOCK}
+OUTER:
+	for {
+		tok := p.Peek()
+		if tok.Type != Keyword || tok.Value != "else" {
+			p.Unread()
+			break OUTER
+		}
+		p.Advance()
+
+		tok = p.Peek()
+		if tok.Type == Keyword && tok.Value == "if" {
+			p.Advance()
+			tok = p.Next()
+			if tok.Type != OpenParen {
+				return nil, fmt.Errorf(`expected open paren, got %q`, tok.Value)
+			}
+
+			cond, err := p.handleExpr()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse else if condition: %w`, err)
+			}
+
+			block, err := p.handleIfChildBlock()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse else if block: %w`, err)
+			}
+			ifBlock.AddElseIf(cond, block...)
+		} else {
+			p.Unread()
+			block, err := p.handleIfChildBlock()
+			if err != nil {
+				return nil, fmt.Errorf(`failed to parse else if block: %w`, err)
+			}
+			ifBlock.Else(block...)
+			break OUTER
+		}
+	}
+	return ifBlock, nil
 }
