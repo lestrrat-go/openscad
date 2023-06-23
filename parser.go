@@ -119,7 +119,6 @@ func (p *parser) handleStatement() (ast.Stmt, error) {
 		return p.handleBlock()
 	default:
 		p.Unread()
-		panic("HERE")
 		return nil, fmt.Errorf(`statement: unhandled token %q`, tok.Value)
 	}
 	return nil, fmt.Errorf(`unreachable: %#v`, tok)

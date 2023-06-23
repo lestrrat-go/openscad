@@ -96,17 +96,8 @@ func (l *lexer) skipWhiteSpaces() {
 	}
 }
 
-func (l *lexer) consume(v []byte) {
-	l.src = bytes.TrimPrefix(l.src, v)
-}
-
 func (l *lexer) emit(typ int, value string) {
 	l.ch <- &Token{Type: typ, Value: value}
-}
-
-type cache struct {
-	r rune
-	s int
 }
 
 func (l *lexer) peek() rune {
@@ -324,14 +315,9 @@ func Lex(ch chan *Token, src []byte) {
 		l.unread()
 
 		// it must be an identifier, then
-		l.captureIdent()
+		_ = l.captureIdent() // TODO: error handling
 	}
 	l.emit(EOF, "")
-}
-
-func (l *lexer) peekExpect(typ int, v []byte) bool {
-	l.skipWhiteSpaces()
-	return bytes.HasPrefix(l.src, v)
 }
 
 func (l *lexer) expect(typ int, v []byte) error {

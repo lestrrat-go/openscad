@@ -1,6 +1,7 @@
 package dsl_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -30,7 +31,9 @@ func Example() {
 		dsl.Call("foobar"),
 	)
 
-	ast.Emit(stmts, os.Stdout)
+	if err := ast.Emit(stmts, os.Stdout); err != nil {
+		fmt.Printf("failed to emit: %s\n", err)
+	}
 	//OUTPUT:
 	// width=30;
 	//
@@ -47,6 +50,7 @@ func Example() {
 	// foobar();
 }
 
+//nolint:govet
 func ExampleBezier2D() {
 	crv := bezier.New(
 		vg.Point{0, 0}, vg.Point{20, 2}, vg.Point{40, -1}, vg.Point{90, -3},
@@ -63,7 +67,9 @@ func ExampleBezier2D() {
 		dsl.Polygon(points, nil),
 	)
 
-	ast.Emit(stmts, os.Stdout)
+	if err := ast.Emit(stmts, os.Stdout); err != nil {
+		fmt.Printf("failed to emit: %s\n", err)
+	}
 }
 
 func TestOperatorPrecedence(t *testing.T) {
