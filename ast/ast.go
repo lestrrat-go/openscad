@@ -6,8 +6,6 @@ import (
 	"io"
 	"reflect"
 	"strings"
-
-	"github.com/lestrrat-go/blackmagic"
 )
 
 // Expr represents an expression in the OpenSCAD language.
@@ -26,20 +24,8 @@ type Stmt interface {
 	EmitStmt(*EmitContext, io.Writer) error
 }
 
-type identFa struct{}
-type identFn struct{}
-type identFs struct{}
 type identIndent struct{}
 type identAssignment struct{}
-
-func IdentFn() interface{} {
-	return identFn{}
-}
-
-func GetValue(ctx context.Context, ident interface{}, ptr interface{}) error {
-	val := ctx.Value(ident)
-	return blackmagic.AssignIfCompatible(ptr, val)
-}
 
 func GetIndent(ctx context.Context) string {
 	s := ctx.Value(identIndent{})

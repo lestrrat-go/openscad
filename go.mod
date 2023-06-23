@@ -3,7 +3,6 @@ module github.com/lestrrat-go/openscad
 go 1.20
 
 require (
-	github.com/lestrrat-go/blackmagic v1.0.1
 	github.com/lestrrat-go/option v1.0.1
 	github.com/stretchr/testify v1.7.1
 	gonum.org/v1/plot v0.13.0

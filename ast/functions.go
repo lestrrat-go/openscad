@@ -1,8 +1,10 @@
 package ast
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"strings"
 )
 
 type Function struct {
@@ -36,7 +38,7 @@ func (f *Function) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if err := f.EmitExpr(ctx, w); err != nil {
 		return err
 	}
-	fmt.Fprint(w, ";\n")
+	fmt.Fprint(w, ";")
 	return nil
 }
 
@@ -57,9 +59,21 @@ func (f *Function) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	if f.body == nil {
 		return fmt.Errorf(`expected a body`)
 	}
-	ctx = ctx.IncrIndent()
-	fmt.Fprintf(w, "\n%s", ctx.Indent())
-	return emitExpr(ctx, w, f.body)
+
+	var body bytes.Buffer
+	if err := emitExpr(ctx, &body, f.body); err != nil {
+		return err
+	}
+
+	if strings.ContainsRune(body.String(), '\n') {
+		fmt.Fprint(w, "\n")
+		if err := addIndent(w, &body, ctx.Indent()+singleIndent); err != nil {
+			return err
+		}
+	} else {
+		body.WriteTo(w)
+	}
+	return nil
 }
 
 type LookupStmt struct {

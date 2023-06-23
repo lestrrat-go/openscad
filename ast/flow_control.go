@@ -37,10 +37,10 @@ func emitLetPreamble(ctx *EmitContext, w io.Writer, vars []*Variable) error {
 	}
 
 	if strings.ContainsRune(letVars.String(), '\n') {
-		if err := addIndent(w, &letVars, ctx.Indent()+indent); err != nil {
+		if err := addIndent(w, &letVars, singleIndent); err != nil {
 			return err
 		}
-		fmt.Fprintf(w, "%s)", ctx.Indent())
+		fmt.Fprintf(w, "\n)")
 	} else {
 		letVars.WriteTo(w)
 		fmt.Fprint(w, ")")
@@ -79,7 +79,7 @@ func (l *LetExpr) EmitExpr(ctx *EmitContext, w io.Writer) error {
 
 	preamble.WriteTo(w)
 	if fmtAsBlock {
-		fmt.Fprintf(w, "\n%s", ctx.Indent()+indent)
+		fmt.Fprintf(w, "\n%s", singleIndent)
 	}
 	body.WriteTo(w)
 
@@ -207,8 +207,13 @@ func emitForDecl(ctx *EmitContext, w io.Writer, loopVars []*LoopVar) error {
 
 func addIndent(dst io.Writer, src io.Reader, indent string) error {
 	scanner := bufio.NewScanner(src)
+	i := 0
 	for scanner.Scan() {
-		fmt.Fprintf(dst, "%s%s\n", indent, scanner.Text())
+		if i > 0 {
+			fmt.Fprintf(dst, "\n")
+		}
+		fmt.Fprintf(dst, "%s%s", indent, scanner.Text())
+		i++
 	}
 	return scanner.Err()
 }
@@ -226,7 +231,7 @@ func (f *ForExpr) EmitExpr(ctx *EmitContext, w io.Writer) error {
 		}
 
 		fmt.Fprintln(w)
-		if err := addIndent(w, &body, indent); err != nil {
+		if err := addIndent(w, &body, singleIndent); err != nil {
 			return fmt.Errorf(`failed to emit for expression: %w`, err)
 		}
 	} else {
@@ -307,19 +312,42 @@ func (op *TernaryOp) FalseExpr() interface{} {
 
 func (op *TernaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	ctx = ctx.WithAllowAssignment(false)
-	fmt.Fprint(w, `(`)
-	if err := emitExpr(ctx, w, op.condition); err != nil {
+
+	var cond, trueExpr, falseExpr bytes.Buffer
+
+	if err := emitExpr(ctx, &cond, op.condition); err != nil {
 		return err
 	}
-	fmt.Fprint(w, ` ? `)
-	if err := emitExpr(ctx, w, op.trueExpr); err != nil {
+	if err := emitExpr(ctx, &trueExpr, op.trueExpr); err != nil {
 		return err
 	}
-	fmt.Fprint(w, ` : `)
-	if err := emitExpr(ctx, w, op.falseExpr); err != nil {
+	if err := emitExpr(ctx, &falseExpr, op.falseExpr); err != nil {
 		return err
 	}
-	fmt.Fprint(w, `)`)
+
+	fmtAsBlock := strings.ContainsRune(cond.String(), '\n') ||
+		strings.ContainsRune(trueExpr.String(), '\n') ||
+		strings.ContainsRune(falseExpr.String(), '\n')
+	if fmtAsBlock {
+		if err := addIndent(w, &cond, ctx.Indent()); err != nil {
+			return fmt.Errorf(`failed to emit ternary condition: %w`, err)
+		}
+		fmt.Fprint(w, " ?\n")
+		if err := addIndent(w, &trueExpr, ctx.Indent()+singleIndent); err != nil {
+			return fmt.Errorf(`failed to emit ternary true expression: %w`, err)
+		}
+		fmt.Fprint(w, " :\n")
+		if err := addIndent(w, &falseExpr, ctx.Indent()+singleIndent); err != nil {
+			return fmt.Errorf(`failed to emit ternary false expression: %w`, err)
+		}
+	} else {
+		cond.WriteTo(w)
+		fmt.Fprint(w, ` ? `)
+		trueExpr.WriteTo(w)
+		fmt.Fprint(w, ` : `)
+		falseExpr.WriteTo(w)
+	}
+
 	return nil
 }
 

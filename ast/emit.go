@@ -102,20 +102,20 @@ func (e *EmitContext) WithNestedBinaryOp(v bool) *EmitContext {
 	return e2
 }
 
-const indent = "  "
+const singleIndent = "  "
 
 func (e *EmitContext) IncrIndent() *EmitContext {
-	return e.WithIndent(e.indent + indent)
+	return e.WithIndent(e.indent + singleIndent)
 }
 
 func (e *EmitContext) DecrIndent() *EmitContext {
 	if e.indent == "" {
 		return e
 	}
-	if len(e.indent) < len(indent) {
+	if len(e.indent) < len(singleIndent) {
 		return e.WithIndent("")
 	}
-	return e.WithIndent(e.indent[:len(e.indent)-len(indent)])
+	return e.WithIndent(e.indent[:len(e.indent)-len(singleIndent)])
 }
 
 func EmitFile(filename string, w io.Writer, options ...EmitFileOption) error {
@@ -241,7 +241,7 @@ func emitListContent(ctx *EmitContext, w io.Writer, rv reflect.Value) error {
 }
 
 func emitAny(ctx *EmitContext, w io.Writer, v interface{}) error {
-	childIndent := ctx.Indent() + indent
+	childIndent := ctx.Indent() + singleIndent
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Slice:
@@ -257,7 +257,7 @@ func emitAny(ctx *EmitContext, w io.Writer, v interface{}) error {
 			if err := addIndent(w, &content, childIndent); err != nil {
 				return err
 			}
-			fmt.Fprintf(w, "%s]", ctx.Indent())
+			fmt.Fprintf(w, "\n%s]", ctx.Indent())
 		} else {
 			content.WriteTo(w)
 			fmt.Fprint(w, "]")
