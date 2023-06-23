@@ -316,13 +316,13 @@ func (op *TernaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	var cond, trueExpr, falseExpr bytes.Buffer
 
 	if err := emitExpr(ctx, &cond, op.condition); err != nil {
-		return err
+		return fmt.Errorf(`failed to emit ternary condition: %w`, err)
 	}
 	if err := emitExpr(ctx, &trueExpr, op.trueExpr); err != nil {
-		return err
+		return fmt.Errorf(`failed to emit ternary true expression: %w`, err)
 	}
 	if err := emitExpr(ctx, &falseExpr, op.falseExpr); err != nil {
-		return err
+		return fmt.Errorf(`failed to emit ternary false expression: %w`, err)
 	}
 
 	fmtAsBlock := strings.ContainsRune(cond.String(), '\n') ||
@@ -330,22 +330,28 @@ func (op *TernaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 		strings.ContainsRune(falseExpr.String(), '\n')
 	if fmtAsBlock {
 		if err := addIndent(w, &cond, ctx.Indent()); err != nil {
-			return fmt.Errorf(`failed to emit ternary condition: %w`, err)
+			return fmt.Errorf(`failed to write ternary condition: %w`, err)
 		}
 		fmt.Fprint(w, " ?\n")
 		if err := addIndent(w, &trueExpr, ctx.Indent()+singleIndent); err != nil {
-			return fmt.Errorf(`failed to emit ternary true expression: %w`, err)
+			return fmt.Errorf(`failed to write ternary true expression: %w`, err)
 		}
 		fmt.Fprint(w, " :\n")
 		if err := addIndent(w, &falseExpr, ctx.Indent()+singleIndent); err != nil {
-			return fmt.Errorf(`failed to emit ternary false expression: %w`, err)
+			return fmt.Errorf(`failed to write ternary false expression: %w`, err)
 		}
 	} else {
-		cond.WriteTo(w)
+		if _, err := cond.WriteTo(w); err != nil {
+			return fmt.Errorf(`failed to err ternary condition: %w`, err)
+		}
 		fmt.Fprint(w, ` ? `)
-		trueExpr.WriteTo(w)
+		if _, err := trueExpr.WriteTo(w); err != nil {
+			return fmt.Errorf(`failed to err ternary true expression: %w`, err)
+		}
 		fmt.Fprint(w, ` : `)
-		falseExpr.WriteTo(w)
+		if _, err := falseExpr.WriteTo(w); err != nil {
+			return fmt.Errorf(`failed to err ternary false expression: %w`, err)
+		}
 	}
 
 	return nil
