@@ -25,7 +25,6 @@ type Stmt interface {
 }
 
 type identIndent struct{}
-type identAssignment struct{}
 
 func GetIndent(ctx context.Context) string {
 	s := ctx.Value(identIndent{})
@@ -140,17 +139,6 @@ func (p *Variable) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	}
 	fmt.Fprint(w, `;`)
 	return nil
-}
-
-func getBool(ctx context.Context, ident interface{}) bool {
-	v := ctx.Value(ident)
-	if v == nil {
-		return false
-	}
-	if b, ok := v.(bool); ok {
-		return b
-	}
-	return false
 }
 
 type Module struct {

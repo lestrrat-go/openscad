@@ -118,11 +118,17 @@ func (c *Cube) Fn(v int) *Cube {
 func (c *Cube) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	ctx = ctx.WithAllowAssignment(false)
 	fmt.Fprintf(w, `%scube([`, ctx.Indent())
-	emitValue(ctx, w, c.width)
+	if err := emitValue(ctx, w, c.width); err != nil {
+		return fmt.Errorf(`failed to emit cube width: %w`, err)
+	}
 	fmt.Fprintf(w, `, `)
-	emitValue(ctx, w, c.depth)
+	if err := emitValue(ctx, w, c.depth); err != nil {
+		return fmt.Errorf(`failed to emit cube depth: %w`, err)
+	}
 	fmt.Fprintf(w, `, `)
-	emitValue(ctx, w, c.height)
+	if err := emitValue(ctx, w, c.height); err != nil {
+		return fmt.Errorf(`failed to emit cube height: %w`, err)
+	}
 	fmt.Fprintf(w, `]`)
 
 	emitCenter(w, c.center)
