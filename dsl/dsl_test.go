@@ -53,7 +53,7 @@ func Example() {
 //nolint:govet
 func ExampleBezier2D() {
 	crv := bezier.New(
-		vg.Point{0, 0}, vg.Point{20, 2}, vg.Point{40, -1}, vg.Point{90, -3},
+		vg.Point{X: 0, Y: 0}, vg.Point{X: 20, Y: 2}, vg.Point{X: 40, Y: -1}, vg.Point{X: 90, Y: -3},
 	)
 
 	var pts ast.Point2DList
