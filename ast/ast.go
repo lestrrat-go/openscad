@@ -130,8 +130,7 @@ func (p *Variable) emit(ctx *EmitContext, w io.Writer, isStmt bool) error {
 }
 
 func (p *Variable) EmitExpr(ctx *EmitContext, w io.Writer) error {
-	p.emit(ctx, w, false)
-	return nil
+	return p.emit(ctx, w, false)
 }
 
 func (p *Variable) EmitStmt(ctx *EmitContext, w io.Writer) error {
