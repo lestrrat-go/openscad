@@ -54,19 +54,16 @@ func NewPolygon(points, paths interface{}) *Polygon {
 }
 
 func (p *Polygon) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprintf(w, `%spolygon(points=`, ctx.Indent())
-	ctx = ctx.WithAllowAssignment(false)
-	if err := emitValue(ctx, w, p.points); err != nil {
-		return err
+	var parameters []interface{}
+	if p.points == nil {
+		return fmt.Errorf(`polygon: points is required`)
 	}
+	parameters = append(parameters, NewVariable("points").Value(p.points))
 	if p.paths != nil {
-		fmt.Fprintf(w, `, paths=`)
-		if err := emitValue(ctx, w, p.paths); err != nil {
-			return err
-		}
+		parameters = append(parameters, NewVariable("paths").Value(p.paths))
 	}
-	fmt.Fprint(w, `);`)
-	return nil
+
+	return NewCall("polygon").Parameters(parameters...).EmitStmt(ctx, w)
 }
 
 func emitCenter(w io.Writer, ptr *bool) {

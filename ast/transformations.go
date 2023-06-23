@@ -97,8 +97,8 @@ func NewLinearExtrude(height, center, convexity, twist, scale interface{}, child
 	}
 }
 
-func (l *LinearExtrude) Add(s Stmt) *LinearExtrude {
-	l.children = append(l.children, s)
+func (l *LinearExtrude) Add(stmts ...Stmt) *LinearExtrude {
+	l.children = append(l.children, stmts...)
 	return l
 }
 
@@ -108,44 +108,34 @@ func (l *LinearExtrude) Fn(fn int) *LinearExtrude {
 }
 
 func (l *LinearExtrude) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	ctx = ctx.WithAllowAssignment(false)
-	fmt.Fprintf(w, `%slinear_extrude(height=`, ctx.Indent())
+	var parameters []interface{}
 	if l.height == nil {
 		return fmt.Errorf("height must be specified")
 	}
-	if err := emitValue(ctx, w, l.height); err != nil {
-		return fmt.Errorf(`failed to emit linear_extrude height: %w`, err)
-	}
+	parameters = append(parameters, NewVariable("height").Value(l.height))
 
-	if l.center != nil {
-		fmt.Fprint(w, `, center=`)
-		if err := emitValue(ctx, w, l.center); err != nil {
-			return fmt.Errorf(`failed to emit linear_extrude center: %w`, err)
-		}
+	if v := l.center; v != nil {
+		parameters = append(parameters, NewVariable("center").Value(v))
 	}
-	if l.convexity != nil {
-		fmt.Fprintf(w, `, convexity=`)
-		if err := emitValue(ctx, w, l.convexity); err != nil {
-			return fmt.Errorf(`failed to emit linear_extrude convexity: %w`, err)
-		}
+	if v := l.convexity; v != nil {
+		parameters = append(parameters, NewVariable("convexity").Value(v))
 	}
-	if l.twist != nil {
-		fmt.Fprintf(w, `, twist=`)
-		if err := emitValue(ctx, w, l.twist); err != nil {
-			return fmt.Errorf(`failed to emit linear_extrude twist: %w`, err)
-		}
+	if v := l.twist; v != nil {
+		parameters = append(parameters, NewVariable("twist").Value(v))
 	}
-	if l.scale != nil {
-		fmt.Fprintf(w, `, scale=`)
-		if err := emitValue(ctx, w, l.scale); err != nil {
-			return fmt.Errorf(`failed to emit linear_extrude scale: %w`, err)
-		}
+	if v := l.scale; v != nil {
+		parameters = append(parameters, NewVariable("scale").Value(v))
 	}
 	if l.fn != nil {
-		emitFn(w, l.fn)
+		parameters = append(parameters, NewVariable("$fn").Value(l.fn))
 	}
-	fmt.Fprint(w, `)`)
-	return emitChildren(ctx, w, l.children, false)
+	call := NewCall("linear_extrude").
+		Parameters(parameters...)
+	if children := l.children; len(children) > 0 {
+		call = call.Add(children...)
+	}
+
+	return call.EmitStmt(ctx, w)
 }
 
 type Hull struct{ noArgBlock }
