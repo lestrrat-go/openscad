@@ -208,6 +208,10 @@ func emitExpr(ctx *EmitContext, w io.Writer, v interface{}) error {
 	return emitValue(ctx.ForceExpr(), w, v)
 }
 
+func emitStmt(ctx *EmitContext, w io.Writer, v interface{}) error {
+	return emitValue(ctx.ForceStmt(), w, v)
+}
+
 func emitListContent(ctx *EmitContext, w io.Writer, rv reflect.Value) error {
 	// lists are expressed as a single line if they contain 3 or fewer elements
 	separateLine := rv.Len() > 3

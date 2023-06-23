@@ -35,90 +35,109 @@ func Parse(src []byte) (ast.Stmts, error) {
 	return stmts, nil
 }
 
+func (p *parser) handleStatement() (ast.Stmt, error) {
+	tok := p.Peek()
+
+	switch tok.Type {
+	case Percent:
+		p.Advance()
+		stmt, err := p.handleStatement()
+		if err != nil {
+			return nil, err
+		}
+		return ast.NewUnaryOp("%", stmt), nil
+	case Sharp:
+		p.Advance()
+		stmt, err := p.handleStatement()
+		if err != nil {
+			return nil, err
+		}
+		return ast.NewUnaryOp("#", stmt), nil
+	case Asterisk:
+		p.Advance()
+		stmt, err := p.handleStatement()
+		if err != nil {
+			return nil, err
+		}
+		return ast.NewUnaryOp("*", stmt), nil
+	default:
+		p.Unread()
+	}
+
+	tok = p.Peek()
+	switch tok.Type {
+	case Keyword:
+		switch tok.Value {
+		case "include":
+			p.Unread()
+			return p.handleInclude()
+		case "use":
+			p.Unread()
+			return p.handleUse()
+		case "let":
+			p.Unread()
+			return p.handleLetBlock()
+		case "module":
+			p.Unread()
+			return p.handleModule()
+		case "function":
+			p.Unread()
+			fn, err := p.handleFunction()
+			if err != nil {
+				return nil, err
+			}
+			tok = p.Next()
+			if tok.Type != Semicolon {
+				return nil, fmt.Errorf(`expected semicolon after function declaration for %q, got %q`, fn.Name(), tok.Value)
+			}
+			return fn, nil
+		case "for":
+			p.Unread()
+			return p.handleForBlock()
+		default:
+			return nil, fmt.Errorf(`unknown keyword %q`, tok.Value)
+		}
+	case Ident:
+		p.Unread()
+		stmt, semicolon, err := p.handleAssignmentOrFunctionCall()
+		if err != nil {
+			return nil, err
+		}
+
+		if semicolon {
+			tok = p.Next()
+			if tok.Type != Semicolon {
+				return nil, fmt.Errorf(`expected semicolon after assignment or function call, got %q`, tok.Value)
+			}
+		}
+		return stmt, nil
+	case OpenBrace:
+		p.Unread()
+		return p.handleBlock()
+	default:
+		p.Unread()
+		return nil, fmt.Errorf(`unhandled token %q`, tok.Value)
+	}
+	return nil, fmt.Errorf(`unreachable: %#v`, tok)
+}
+
 func (p *parser) handleStatements() (ast.Stmts, error) {
 	var stmts ast.Stmts
 	for {
 		tok := p.Peek()
 		switch tok.Type {
-		case Keyword:
-			switch tok.Value {
-			case "include":
-				p.Unread()
-				includeStmt, err := p.handleInclude()
-				if err != nil {
-					return nil, err
-				}
-				stmts = append(stmts, includeStmt)
-			case "use":
-				p.Unread()
-				useStmt, err := p.handleUse()
-				if err != nil {
-					return nil, err
-				}
-				stmts = append(stmts, useStmt)
-			case "let":
-				p.Unread()
-				letBlock, err := p.handleLetBlock()
-				if err != nil {
-					return nil, err
-				}
-				stmts = append(stmts, letBlock)
-			case "module":
-				p.Unread()
-				module, err := p.handleModule()
-				if err != nil {
-					return nil, err
-				}
-				stmts = append(stmts, module)
-			case "function":
-				p.Unread()
-				fn, err := p.handleFunction()
-				if err != nil {
-					return nil, err
-				}
-				tok = p.Next()
-				if tok.Type != Semicolon {
-					return nil, fmt.Errorf(`expected semicolon after function declaration for %q, got %q`, fn.Name(), tok.Value)
-				}
-				stmts = append(stmts, fn)
-			case "for":
-				p.Unread()
-				block, err := p.handleForBlock()
-				if err != nil {
-					return nil, err
-				}
-				stmts = append(stmts, block)
-			default:
-				return nil, fmt.Errorf(`unknown keyword %q`, tok.Value)
-			}
-		case Ident:
-			p.Unread()
-			stmt, semicolon, err := p.handleAssignmentOrFunctionCall()
-			if err != nil {
-				return nil, err
-			}
-
-			if semicolon {
-				tok = p.Next()
-				if tok.Type != Semicolon {
-					return nil, fmt.Errorf(`expected semicolon after assignment or function call, got %q`, tok.Value)
-				}
-			}
-			stmts = append(stmts, stmt)
-		case OpenBrace:
-			p.Unread()
-			block, err := p.handleBlock()
-			if err != nil {
-				return nil, err
-			}
-			stmts = append(stmts, ast.NewBareBlock(block...))
 		case CloseBrace:
 			p.Unread()
 			return stmts, nil
 		case EOF:
 			return stmts, nil
 		default:
-			return nil, fmt.Errorf(`unhandled token %q`, tok.Value)
+			p.Unread()
+			stmt, err := p.handleStatement()
+			if err != nil {
+				return nil, err
+			}
+			stmts = append(stmts, stmt)
 		}
 	}
 }

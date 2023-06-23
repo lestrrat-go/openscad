@@ -53,6 +53,16 @@ func (op *UnaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	return nil
 }
 
+func (op *UnaryOp) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	// A unary operator for *, #, % can be used as a statement.
+	fmt.Fprintf(w, `%s%s`, ctx.Indent(), op.op)
+	if err := emitStmt(ctx, w, op.expr); err != nil {
+		return err
+	}
+	// Let the child expression emit the semicolon
+	return nil
+}
+
 type BinaryOp struct {
 	op    string
 	left  interface{}

@@ -21,6 +21,7 @@ const (
 	asterisk     = '*'
 	slash        = '/'
 	equal        = '='
+	sharp        = '#'
 	dquote       = '"'
 	colon        = ':'
 	semicolon    = ';'
@@ -64,6 +65,7 @@ const (
 	OpenBrace    // {
 	CloseBrace   // }
 	Percent
+	Sharp
 )
 
 type Token struct {
@@ -237,6 +239,8 @@ func Lex(ch chan *Token, src []byte) {
 			}
 		case percent:
 			l.emitBuffer(Percent)
+		case sharp:
+			l.emitBuffer(Sharp)
 		default:
 			found = false
 		}
