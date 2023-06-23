@@ -224,7 +224,9 @@ func (m *Module) EmitStmt(ctx *EmitContext, w io.Writer) error {
 			if i > 0 {
 				fmt.Fprintf(w, ", ")
 			}
-			emitValue(pctx, w, param)
+			if err := emitValue(pctx, w, param); err != nil {
+				return fmt.Errorf(`failed to emit module parameter %d: %w`, i, err)
+			}
 		}
 	}
 	fmt.Fprintf(w, ")")

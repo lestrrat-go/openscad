@@ -236,7 +236,9 @@ func emitListContent(ctx *EmitContext, w io.Writer, rv reflect.Value) error {
 		}
 	}
 
-	body.WriteTo(w)
+	if _, err := body.WriteTo(w); err != nil {
+		return fmt.Errorf(`failed to write list content: %w`, err)
+	}
 	return nil
 }
 
@@ -259,7 +261,9 @@ func emitAny(ctx *EmitContext, w io.Writer, v interface{}) error {
 			}
 			fmt.Fprintf(w, "\n%s]", ctx.Indent())
 		} else {
-			content.WriteTo(w)
+			if _, err := content.WriteTo(w); err != nil {
+				return fmt.Errorf(`failed to write list content: %w`, err)
+			}
 			fmt.Fprint(w, "]")
 		}
 
