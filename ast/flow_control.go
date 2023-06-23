@@ -120,7 +120,9 @@ func (l *LetBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if err := emitLetPreamble(ctx, w, l.variables); err != nil {
 		return err
 	}
-	emitChildren(ctx, w, l.children, false)
+	if err := emitChildren(ctx, w, l.children, false); err != nil {
+		return fmt.Errorf(`failed to emit let block: %v`, err)
+	}
 	return nil
 }
 
@@ -142,13 +144,19 @@ func (fr *ForRange) Increment(incr interface{}) *ForRange {
 
 func (fr *ForRange) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprint(w, `[`)
-	emitValue(ctx, w, fr.start)
+	if err := emitValue(ctx, w, fr.start); err != nil {
+		return fmt.Errorf(`failed to emit for range start: %v`, err)
+	}
 	fmt.Fprint(w, `:`)
 	if incr := fr.increment; incr != nil {
-		emitValue(ctx, w, incr)
+		if err := emitValue(ctx, w, incr); err != nil {
+			return fmt.Errorf(`failed to emit for range increment: %v`, err)
+		}
 		fmt.Fprint(w, `:`)
 	}
-	emitValue(ctx, w, fr.end)
+	if err := emitValue(ctx, w, fr.end); err != nil {
+		return fmt.Errorf(`failed to emit for range end: %v`, err)
+	}
 	fmt.Fprint(w, `]`)
 	return nil
 }

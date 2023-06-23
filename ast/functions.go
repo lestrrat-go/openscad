@@ -71,7 +71,9 @@ func (f *Function) EmitExpr(ctx *EmitContext, w io.Writer) error {
 			return err
 		}
 	} else {
-		body.WriteTo(w)
+		if _, err := body.WriteTo(w); err != nil {
+			return fmt.Errorf(`failed to write function body: %w`, err)
+		}
 	}
 	return nil
 }
