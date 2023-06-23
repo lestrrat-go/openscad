@@ -121,7 +121,6 @@ func (p *parser) handleStatement() (ast.Stmt, error) {
 		p.Unread()
 		return nil, fmt.Errorf(`statement: unhandled token %q`, tok.Value)
 	}
-	return nil, fmt.Errorf(`unreachable: %#v`, tok)
 }
 
 func (p *parser) handleStatements() (ast.Stmts, error) {
