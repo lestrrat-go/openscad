@@ -267,7 +267,9 @@ func (s *Sphere) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if s.radius == nil {
 		return fmt.Errorf("radius must be specified")
 	}
-	emitValue(ctx, w, s.radius)
+	if err := emitValue(ctx, w, s.radius); err != nil {
+		return fmt.Errorf(`failed to emit sphere radius: %w`, err)
+	}
 	emitFa(w, s.fa)
 	emitFs(w, s.fs)
 	emitFn(w, s.fn)

@@ -30,7 +30,9 @@ func (t *Translate) Add(s Stmt) *Translate {
 
 func (t *Translate) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	fmt.Fprint(w, `translate(`)
-	emitExpr(ctx.WithAllowAssignment(false), w, t.v)
+	if err := emitExpr(ctx.WithAllowAssignment(false), w, t.v); err != nil {
+		return fmt.Errorf(`failed to emit translate vector: %v`, err)
+	}
 	fmt.Fprint(w, `)`)
 	return emitChildren(ctx, w, t.children, true)
 }
@@ -66,7 +68,9 @@ func (r *Rotate) Add(s Stmt) *Rotate {
 func (r *Rotate) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	indent := ctx.Indent()
 	fmt.Fprintf(w, `%srotate(`, indent)
-	emitExpr(ctx, w, r.v)
+	if err := emitExpr(ctx, w, r.v); err != nil {
+		return fmt.Errorf(`failed to emit rotate vector: %w`, err)
+	}
 	fmt.Fprint(w, `)`)
 
 	return emitChildren(ctx, w, r.children, false)
@@ -109,22 +113,33 @@ func (l *LinearExtrude) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if l.height == nil {
 		return fmt.Errorf("height must be specified")
 	}
-	emitValue(ctx, w, l.height)
+	if err := emitValue(ctx, w, l.height); err != nil {
+		return fmt.Errorf(`failed to emit linear_extrude height: %w`, err)
+	}
+
 	if l.center != nil {
 		fmt.Fprint(w, `, center=`)
-		emitValue(ctx, w, l.center)
+		if err := emitValue(ctx, w, l.center); err != nil {
+			return fmt.Errorf(`failed to emit linear_extrude center: %w`, err)
+		}
 	}
 	if l.convexity != nil {
 		fmt.Fprintf(w, `, convexity=`)
-		emitValue(ctx, w, l.convexity)
+		if err := emitValue(ctx, w, l.convexity); err != nil {
+			return fmt.Errorf(`failed to emit linear_extrude convexity: %w`, err)
+		}
 	}
 	if l.twist != nil {
 		fmt.Fprintf(w, `, twist=`)
-		emitValue(ctx, w, l.twist)
+		if err := emitValue(ctx, w, l.twist); err != nil {
+			return fmt.Errorf(`failed to emit linear_extrude twist: %w`, err)
+		}
 	}
 	if l.scale != nil {
 		fmt.Fprintf(w, `, scale=`)
-		emitValue(ctx, w, l.scale)
+		if err := emitValue(ctx, w, l.scale); err != nil {
+			return fmt.Errorf(`failed to emit linear_extrude scale: %w`, err)
+		}
 	}
 	if l.fn != nil {
 		emitFn(w, l.fn)
