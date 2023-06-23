@@ -114,7 +114,7 @@ func (op *BinaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 	if err := emitExpr(ctx, w, op.left); err != nil {
 		return fmt.Errorf("failed to emit left side of binary op: %v", err)
 	}
-	fmt.Fprintf(w, `%s`, op.op)
+	fmt.Fprintf(w, ` %s `, op.op)
 	if err := emitExpr(ctx, w, op.right); err != nil {
 		return fmt.Errorf("failed to emit right side of binary op: %v", err)
 	}
