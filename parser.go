@@ -164,7 +164,6 @@ func (p *parser) Next() *Token {
 		return tok
 	}
 	panic("failed to peek")
-	return nil
 }
 
 func (p *parser) handleModule() (*ast.Module, error) {
@@ -620,9 +619,6 @@ func (p *parser) handleFunction() (*ast.Function, error) {
 	}
 
 	fn.Body(expr)
-
-	tok = p.Peek()
-	p.Unread()
 	return fn, nil
 }
 
