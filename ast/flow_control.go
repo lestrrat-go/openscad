@@ -38,11 +38,13 @@ func emitLetPreamble(ctx *EmitContext, w io.Writer, vars []*Variable) error {
 
 	if strings.ContainsRune(letVars.String(), '\n') {
 		if err := addIndent(w, &letVars, singleIndent); err != nil {
-			return err
+			return fmt.Errorf(`failed to write let variables: %v`, err)
 		}
 		fmt.Fprintf(w, "\n)")
 	} else {
-		letVars.WriteTo(w)
+		if _, err := letVars.WriteTo(w); err != nil {
+			return fmt.Errorf(`failed to write let variables: %v`, err)
+		}
 		fmt.Fprint(w, ")")
 	}
 	return nil
@@ -77,11 +79,17 @@ func (l *LetExpr) EmitExpr(ctx *EmitContext, w io.Writer) error {
 
 	fmtAsBlock := strings.ContainsRune(preamble.String(), '\n') || strings.ContainsRune(body.String(), '\n')
 
-	preamble.WriteTo(w)
+	if _, err := preamble.WriteTo(w); err != nil {
+		return fmt.Errorf(`failed to write let preamble: %v`, err)
+	}
+
 	if fmtAsBlock {
 		fmt.Fprintf(w, "\n%s", singleIndent)
 	}
-	body.WriteTo(w)
+
+	if _, err := body.WriteTo(w); err != nil {
+		return fmt.Errorf(`failed to write let body: %v`, err)
+	}
 
 	return nil
 }
@@ -159,7 +167,9 @@ func NewLoopVar(variable *Variable, expr interface{}) *LoopVar {
 
 func (lv *LoopVar) String() string {
 	var sb strings.Builder
-	lv.EmitExpr(newEmitContext(), &sb)
+	if err := lv.EmitExpr(newEmitContext(), &sb); err != nil {
+		return fmt.Sprintf(`#LoopVar(error=%s)`, err)
+	}
 	return sb.String()
 }
 

@@ -285,12 +285,14 @@ func Lex(ch chan *Token, src []byte) {
 			}
 		case '-':
 			l.unread()
-			l.captureNumeric()
-			found = true
+			if err := l.captureNumeric(); err != nil {
+				found = false
+			}
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 			l.unread()
-			l.captureNumeric()
-			found = true
+			if err := l.captureNumeric(); err != nil {
+				found = false
+			}
 		default:
 			found = false
 		}
