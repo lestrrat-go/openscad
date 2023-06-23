@@ -7,8 +7,6 @@ import (
 
 	"github.com/lestrrat-go/openscad/ast"
 	"github.com/lestrrat-go/openscad/dsl"
-	"gonum.org/v1/plot/tools/bezier"
-	"gonum.org/v1/plot/vg"
 )
 
 func Example() {
@@ -50,7 +48,8 @@ func Example() {
 	// foobar();
 }
 
-//nolint:govet
+/*
+Comment out to remove dependency
 func ExampleBezier2D() {
 	crv := bezier.New(
 		vg.Point{X: 0, Y: 0}, vg.Point{X: 20, Y: 2}, vg.Point{X: 40, Y: -1}, vg.Point{X: 90, Y: -3},
@@ -71,6 +70,7 @@ func ExampleBezier2D() {
 		fmt.Printf("failed to emit: %s\n", err)
 	}
 }
+*/
 
 func TestOperatorPrecedence(t *testing.T) {
 	right := dsl.Add(3, 4)
