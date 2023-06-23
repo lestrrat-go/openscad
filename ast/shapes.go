@@ -180,7 +180,9 @@ func (c *Cylinder) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	if c.height == nil {
 		return fmt.Errorf("height must be specified")
 	}
-	emitValue(ctx, w, c.height)
+	if err := emitValue(ctx, w, c.height); err != nil {
+		return fmt.Errorf(`failed to emit cylinder height: %w`, err)
+	}
 
 	if c.radius1 == nil {
 		return fmt.Errorf("radius1 must be specified")
@@ -188,12 +190,18 @@ func (c *Cylinder) EmitStmt(ctx *EmitContext, w io.Writer) error {
 
 	if c.radius2 == nil {
 		fmt.Fprint(w, `, r=`)
-		emitValue(ctx, w, c.radius1)
+		if err := emitValue(ctx, w, c.radius1); err != nil {
+			return fmt.Errorf(`failed to emit cylinder radius: %w`, err)
+		}
 	} else {
 		fmt.Fprint(w, `, r1=`)
-		emitValue(ctx, w, c.radius1)
+		if err := emitValue(ctx, w, c.radius1); err != nil {
+			return fmt.Errorf(`failed to emit cylinder radius1: %w`, err)
+		}
 		fmt.Fprint(w, `, r2=`)
-		emitValue(ctx, w, c.radius2)
+		if err := emitValue(ctx, w, c.radius2); err != nil {
+			return fmt.Errorf(`failed to emit cylinder radius2: %w`, err)
+		}
 	}
 	emitCenter(w, c.center)
 	emitFa(w, c.fa)
