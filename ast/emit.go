@@ -26,7 +26,6 @@ type EmitContext struct {
 	as              int
 	allowAssignment bool
 	amalgamate      bool
-	nestedBinaryOp  bool
 }
 
 func newEmitContext() *EmitContext {
@@ -48,7 +47,6 @@ func (e *EmitContext) Copy() *EmitContext {
 		registry:        e.registry,
 		as:              e.as,
 		allowAssignment: e.allowAssignment,
-		nestedBinaryOp:  e.nestedBinaryOp,
 	}
 }
 
@@ -76,10 +74,6 @@ func (e *EmitContext) AllowAssignment() bool {
 	return e.allowAssignment
 }
 
-func (e *EmitContext) IsNestedBinaryOp() bool {
-	return e.nestedBinaryOp
-}
-
 func (e *EmitContext) Indent() string {
 	return e.indent
 }
@@ -93,12 +87,6 @@ func (e *EmitContext) WithIndent(indent string) *EmitContext {
 func (e *EmitContext) WithAllowAssignment(allowAssignment bool) *EmitContext {
 	e2 := e.Copy()
 	e2.allowAssignment = allowAssignment
-	return e2
-}
-
-func (e *EmitContext) WithNestedBinaryOp(v bool) *EmitContext {
-	e2 := e.Copy()
-	e2.nestedBinaryOp = v
 	return e2
 }
 

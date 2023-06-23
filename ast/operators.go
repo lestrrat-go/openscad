@@ -106,11 +106,6 @@ func (op *BinaryOp) Left() interface{} {
 }
 
 func (op *BinaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
-	if ctx.IsNestedBinaryOp() && op.op != "*" {
-		fmt.Fprint(w, `(`)
-		defer fmt.Fprint(w, `)`)
-	}
-	ctx = ctx.WithNestedBinaryOp(true)
 	if err := emitExpr(ctx, w, op.left); err != nil {
 		return fmt.Errorf("failed to emit left side of binary op: %v", err)
 	}
