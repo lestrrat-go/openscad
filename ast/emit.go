@@ -223,22 +223,25 @@ func emitExpr(ctx *EmitContext, w io.Writer, v interface{}) error {
 func emitListContent(ctx *EmitContext, w io.Writer, rv reflect.Value) error {
 	// lists are expressed as a single line if they contain 3 or fewer elements
 	separateLine := rv.Len() > 3
+	var body bytes.Buffer
 	for i := 0; i < rv.Len(); i++ {
 		if i > 0 {
-			fmt.Fprintf(w, ", ")
+			fmt.Fprintf(&body, ", ")
 		}
 		if separateLine {
-			fmt.Fprintln(w)
-			fmt.Fprint(w, ctx.Indent())
+			fmt.Fprintln(&body)
 		}
-		if err := emitValue(ctx, w, rv.Index(i).Interface()); err != nil {
+		if err := emitValue(ctx, &body, rv.Index(i).Interface()); err != nil {
 			return err
 		}
 	}
+
+	body.WriteTo(w)
 	return nil
 }
 
 func emitAny(ctx *EmitContext, w io.Writer, v interface{}) error {
+	childIndent := ctx.Indent() + indent
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Slice:
@@ -251,7 +254,7 @@ func emitAny(ctx *EmitContext, w io.Writer, v interface{}) error {
 
 		// if the result contains any newlines, we emit it as a block
 		if strings.ContainsRune(content.String(), '\n') {
-			if err := addIndent(w, &content, ctx.Indent()); err != nil {
+			if err := addIndent(w, &content, childIndent); err != nil {
 				return err
 			}
 			fmt.Fprintf(w, "%s]", ctx.Indent())

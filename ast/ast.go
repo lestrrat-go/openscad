@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 
 	"github.com/lestrrat-go/blackmagic"
@@ -186,7 +187,13 @@ func emitChildren(ctx *EmitContext, w io.Writer, children []Stmt, forceBrace boo
 	}
 
 	fmt.Fprintf(w, "\n%s{", indent)
+	prev := reflect.TypeOf(children[0]).Elem()
 	for _, c := range children {
+		cur := reflect.TypeOf(c).Elem()
+		if cur.Name() != prev.Name() {
+			fmt.Fprintf(w, "\n")
+		}
+		prev = cur
 		if err := c.EmitStmt(ctx, w); err != nil {
 			return err
 		}

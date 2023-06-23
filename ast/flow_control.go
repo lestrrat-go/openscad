@@ -1,23 +1,50 @@
 package ast
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
 )
 
-func emitLetPreamble(ctx *EmitContext, w io.Writer, vars []*Variable) error {
-	fmt.Fprintf(w, `%slet(`, ctx.Indent())
+func emitLetVars(ctx *EmitContext, w io.Writer, vars []*Variable) error {
+	// If there are more than 3 variables, we want to put each variable on its own line.
+	separateLine := len(vars) > 3
 	ctx = ctx.WithAllowAssignment(true)
 	for i, v := range vars {
 		if i > 0 {
-			fmt.Fprintf(w, `, `)
+			fmt.Fprintf(w, `,`)
+		}
+		if separateLine {
+			fmt.Fprint(w, "\n")
+		} else {
+			fmt.Fprintf(w, " ")
 		}
 		if err := emitExpr(ctx, w, v); err != nil {
 			return err
 		}
 	}
-	fmt.Fprintf(w, `)`)
+	return nil
+}
+
+func emitLetPreamble(ctx *EmitContext, w io.Writer, vars []*Variable) error {
+	fmt.Fprintf(w, `let(`)
+
+	var letVars bytes.Buffer
+	if err := emitLetVars(ctx, &letVars, vars); err != nil {
+		return err
+	}
+
+	if strings.ContainsRune(letVars.String(), '\n') {
+		if err := addIndent(w, &letVars, ctx.Indent()+indent); err != nil {
+			return err
+		}
+		fmt.Fprintf(w, "%s)", ctx.Indent())
+	} else {
+		letVars.WriteTo(w)
+		fmt.Fprint(w, ")")
+	}
 	return nil
 }
 
@@ -38,13 +65,24 @@ func (l *LetExpr) Expr(expr interface{}) *LetExpr {
 }
 
 func (l *LetExpr) EmitExpr(ctx *EmitContext, w io.Writer) error {
-	if err := emitLetPreamble(ctx, w, l.variables); err != nil {
+	var preamble bytes.Buffer
+	if err := emitLetPreamble(ctx, &preamble, l.variables); err != nil {
 		return err
 	}
 
-	if err := emitExpr(ctx, w, l.expr); err != nil {
+	var body bytes.Buffer
+	if err := emitExpr(ctx, &body, l.expr); err != nil {
 		return err
 	}
+
+	fmtAsBlock := strings.ContainsRune(preamble.String(), '\n') || strings.ContainsRune(body.String(), '\n')
+
+	preamble.WriteTo(w)
+	if fmtAsBlock {
+		fmt.Fprintf(w, "\n%s", ctx.Indent()+indent)
+	}
+	body.WriteTo(w)
+
 	return nil
 }
 
@@ -167,14 +205,39 @@ func emitForDecl(ctx *EmitContext, w io.Writer, loopVars []*LoopVar) error {
 	return nil
 }
 
+func addIndent(dst io.Writer, src io.Reader, indent string) error {
+	scanner := bufio.NewScanner(src)
+	for scanner.Scan() {
+		fmt.Fprintf(dst, "%s%s\n", indent, scanner.Text())
+	}
+	return scanner.Err()
+}
+
 func (f *ForExpr) EmitExpr(ctx *EmitContext, w io.Writer) error {
-	if err := emitForDecl(ctx, w, f.loopVars); err != nil {
+	// If the body expression contains any newlines, treat it as a block
+	var body bytes.Buffer
+	if err := emitExpr(ctx, &body, f.expr); err != nil {
 		return err
+	}
+	if strings.ContainsRune(body.String(), '\n') {
+		fmt.Fprintf(w, "\n")
+		if err := emitForDecl(ctx, w, f.loopVars); err != nil {
+			return fmt.Errorf(`failed to emit for expression: %w`, err)
+		}
+
+		fmt.Fprintln(w)
+		if err := addIndent(w, &body, indent); err != nil {
+			return fmt.Errorf(`failed to emit for expression: %w`, err)
+		}
+	} else {
+		if err := emitForDecl(ctx, w, f.loopVars); err != nil {
+			return err
+		}
+		if err := emitExpr(ctx, w, f.expr); err != nil {
+			return err
+		}
 	}
 
-	if err := emitExpr(ctx, w, f.expr); err != nil {
-		return err
-	}
 	return nil
 }
 
