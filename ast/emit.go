@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 )
 
 const (
@@ -219,36 +220,46 @@ func emitExpr(ctx *EmitContext, w io.Writer, v interface{}) error {
 	return emitValue(ctx.ForceExpr(), w, v)
 }
 
+func emitListContent(ctx *EmitContext, w io.Writer, rv reflect.Value) error {
+	// lists are expressed as a single line if they contain 3 or fewer elements
+	separateLine := rv.Len() > 3
+	for i := 0; i < rv.Len(); i++ {
+		if i > 0 {
+			fmt.Fprintf(w, ", ")
+		}
+		if separateLine {
+			fmt.Fprintln(w)
+			fmt.Fprint(w, ctx.Indent())
+		}
+		if err := emitValue(ctx, w, rv.Index(i).Interface()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func emitAny(ctx *EmitContext, w io.Writer, v interface{}) error {
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
 	case reflect.Slice:
 		fmt.Fprint(w, "[")
-		// if this contains more than 3 elements, we'll put each on a separate line
-		separateLine := rv.Len() > 3
-		octx := ctx
-		if separateLine {
-			ctx = ctx.IncrIndent()
-		}
-		for i := 0; i < rv.Len(); i++ {
-			if i > 0 {
-				fmt.Fprintf(w, ", ")
-			}
-			if separateLine {
-				fmt.Fprintln(w)
-				fmt.Fprint(w, ctx.Indent())
-			}
-			if err := emitValue(ctx, w, rv.Index(i).Interface()); err != nil {
-				return err
-			}
-		}
-		ctx = octx
-		if separateLine {
-			fmt.Fprintln(w)
-			fmt.Fprint(w, ctx.Indent())
+
+		var content bytes.Buffer
+		if err := emitListContent(ctx, &content, rv); err != nil {
+			return err
 		}
 
-		fmt.Fprint(w, "]")
+		// if the result contains any newlines, we emit it as a block
+		if strings.ContainsRune(content.String(), '\n') {
+			if err := addIndent(w, &content, ctx.Indent()); err != nil {
+				return err
+			}
+			fmt.Fprintf(w, "%s]", ctx.Indent())
+		} else {
+			content.WriteTo(w)
+			fmt.Fprint(w, "]")
+		}
+
 	default:
 		_, err := fmt.Fprintf(w, "%#v", v)
 		if err != nil {
