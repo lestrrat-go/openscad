@@ -8,6 +8,10 @@
 
 $fn = 50;
 
+// Tip clearance
+function tip_clearance(modul) = modul / 6;
+
+
 /* Library for Involute Gears, Screws and Racks
 
 This library contains the following modules
@@ -651,6 +655,104 @@ module planetary_gear(modul, sun_teeth, planet_teeth, number_planets, width, rim
 
 }
 
+// bg = bevel gear
+function bg_part_cone_diameter(modul, tooth_number) = modul * tooth_number;
+
+function bg_part_cone_radius(modul, tooth_number) = 
+    let(
+        d_outside = bg_part_cone_diameter(modul, tooth_number)
+     )
+        d_outside / 2;
+
+function bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle) = 
+    let (
+        r_outside = bg_part_cone_radius(modul, tooth_number) 
+    )
+        r_outside / sin(partial_cone_angle);
+
+function bg_inside_tooth_cone_radius(modul, tooth_number, partial_cone_angle, tooth_width) =
+    let (
+        rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle)
+    )
+        rg_outside - tooth_width;
+
+function bg_transverse_section_helix_angle(pressure_angle, helix_angle) =
+    atan(tan(pressure_angle) / cos(helix_angle));
+
+function bg_base_cone_angle(pressure_angle, helix_angle, partial_cone_angle) =
+    asin(cos(bg_transverse_section_helix_angle(pressure_angle, helix_angle)) * sin(partial_cone_angle));
+
+function bg_outside_tooth_cone_foot_diameter(modul, tooth_number, partial_cone_angle) =
+    let (
+        d_outside = bg_part_cone_diameter(modul, tooth_number),
+        c = tip_clearance(modul)
+    )
+        d_outside-(modul+c)*2*cos(partial_cone_angle);
+
+function bg_outside_tooth_cone_foot_radius(modul, tooth_number, partial_cone_angle) =
+    let (
+        df_outside = bg_outside_tooth_cone_foot_diameter(modul, tooth_number, partial_cone_angle)
+    )
+        df_outside / 2;
+
+function bg_foot_delta(modul, tooth_number, partial_cone_angle) =
+    let (
+        rf_outside = bg_outside_tooth_cone_foot_radius(modul, tooth_number, partial_cone_angle),
+        rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle)
+    )
+        asin(rf_outside / rg_outside);
+
+function bg_root_cone_radius(modul, tooth_number, partial_cone_angle) =
+    let (
+        rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle),
+        delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle),
+    )
+        rg_outside * sin(delta_f);
+
+function bg_root_cone_height(modul, tooth_number, partial_cone_angle) =
+    let (
+        rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle),
+        delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle),
+    )
+        rg_outside * cos(delta_f);
+
+function bg_complimentary_cone_height(modul, tooth_number, partial_cone_angle, tooth_width) =
+    let (
+        rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle),
+    )
+        (rg_outside - tooth_width) / cos(partial_cone_angle);
+
+function bg_complimentary_cone_foot_radius(modul, tooth_number, partial_cone_angle, tooth_width) =
+    let (
+        rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle)
+    )
+        (rg_outside - tooth_width) / sin(partial_cone_angle);
+
+function bg_complimentary_cone_tip_radius(modul, tooth_number, partial_cone_angle, tooth_width) =
+    let (
+        rk = bg_complimentary_cone_foot_radius(modul, tooth_number, partial_cone_angle, tooth_width),
+        height_k = bg_complimentary_cone_height(modul, tooth_number, partial_cone_angle, tooth_width),
+        delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle)
+    )
+        rk * height_k * tan(delta_f) / (rk + height_k * tan(delta_f));
+
+function bg_complimentary_truncated_cone_height(modul, tooth_number, partial_cone_angle, tooth_width) =
+    let (
+        rk = bg_complimentary_cone_foot_radius(modul, tooth_number, partial_cone_angle, tooth_width),
+        height_k = bg_complimentary_cone_height(modul, tooth_number, partial_cone_angle, tooth_width),
+        delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle)
+    ) 
+        rk*height_k/(height_k*tan(delta_f)+rk);
+
+function bevel_gear_cylinder_height(modul, tooth_number, partial_cone_angle, tooth_width) =
+    // modul=1, tooth_number=11, partial_cone_angle=100, tooth_width=5 should be 4.75925
+    let (
+        height_f = bg_root_cone_height(modul, tooth_number, partial_cone_angle),
+        height_fk = bg_complimentary_truncated_cone_height(modul, tooth_number, partial_cone_angle, tooth_width)
+    )
+        height_f - height_fk;
+
+
 /*  Bevel Gear
     modul = Height of the Tooth Tip over the Partial Cone; Specification for the Outside of the Cone
     tooth_number = Number of Gear Teeth
@@ -662,34 +764,38 @@ module planetary_gear(modul, sun_teeth, planet_teeth, number_planets, width, rim
 module bevel_gear(modul, tooth_number, partial_cone_angle, tooth_width, bore, pressure_angle = 20, helix_angle=0) {
 
     // Dimension Calculations
-    d_outside = modul * tooth_number;                                    // Part Cone Diameter at the Cone Base,
+    d_outside = bg_part_cone_diameter(modul, tooth_number);                                    // Part Cone Diameter at the Cone Base,
                                                                     // corresponds to the Chord in a Spherical Section
-    r_outside = d_outside / 2;                                        // Part Cone Radius at the Cone Base
-    rg_outside = r_outside/sin(partial_cone_angle);                      // Large-Cone Radius for Outside-Tooth, corresponds to the Length of the Cone-Flank;
-    rg_inside = rg_outside - tooth_width;                              // Large-Cone Radius for Inside-Tooth
-    r_inside = r_outside*rg_inside/rg_outside;
-    alpha_spur = atan(tan(pressure_angle)/cos(helix_angle));// Helix Angle in Transverse Section
-    delta_b = asin(cos(alpha_spur)*sin(partial_cone_angle));          // Base Cone Angle
+    r_outside = bg_part_cone_radius(modul, tooth_number);                                        // Part Cone Radius at the Cone Base
+    rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle);                      // Large-Cone Radius for Outside-Tooth, corresponds to the Length of the Cone-Flank;
+    rg_inside = bg_inside_tooth_cone_radius(modul, tooth_number, partial_cone_angle, tooth_width);                              // Large-Cone Radius for Inside-Tooth
+    alpha_spur = bg_transverse_section_helix_angle(pressure_angle, helix_angle);// Helix Angle in Transverse Section
+    delta_b = bg_base_cone_angle(pressure_angle, helix_angle, partial_cone_angle);          // Base Cone Angle
+
     da_outside = (modul <1)? d_outside + (modul * 2.2) * cos(partial_cone_angle): d_outside + modul * 2 * cos(partial_cone_angle);
     ra_outside = da_outside / 2;
     delta_a = asin(ra_outside/rg_outside);
-    c = modul / 6;                                                  // Tip Clearance
-    df_outside = d_outside - (modul +c) * 2 * cos(partial_cone_angle);
-    rf_outside = df_outside / 2;
-    delta_f = asin(rf_outside/rg_outside);
-    rkf = rg_outside*sin(delta_f);                                   // Radius of the Cone Foot
-    height_f = rg_outside*cos(delta_f);                               // Height of the Cone from the Root Cone
+    c = tip_clearance(modul);                                                  // Tip Clearance
+
+    df_outside = bg_outside_tooth_cone_foot_diameter(modul, tooth_number, partial_cone_angle);
+    rf_outside = bg_outside_tooth_cone_foot_radius(modul, tooth_number, partial_cone_angle);
+    delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle);
+    rkf = bg_root_cone_radius(modul, tooth_number, partial_cone_angle);                                   // Radius of the Cone Foot
+    height_f = bg_root_cone_height(modul, tooth_number, partial_cone_angle);                               // Height of the Cone from the Root Cone
 
     echo("Part Cone Diameter at the Cone Base = ", d_outside);
 
     // Sizes for Complementary Truncated Cone
-    height_k = (rg_outside-tooth_width)/cos(partial_cone_angle);          // Height of the Complementary Cone for corrected Tooth Length
-    rk = (rg_outside-tooth_width)/sin(partial_cone_angle);               // Foot Radius of the Complementary Cone
-    rfk = rk*height_k*tan(delta_f)/(rk+height_k*tan(delta_f));        // Tip Radius of the Cylinders for
-                                                                    // Complementary Truncated Cone
-    height_fk = rk*height_k/(height_k*tan(delta_f)+rk);                // height of the Complementary Truncated Cones
+    height_k = bg_complimentary_cone_height(modul, tooth_number, partial_cone_angle, tooth_width);          // Height of the Complementary Cone for corrected Tooth Length
 
-    echo("Bevel Gear Height = ", height_f-height_fk);
+    echo("Complementary Cone Height = ", height_k);
+    rk = bg_complimentary_cone_foot_radius(modul, tooth_number, partial_cone_angle, tooth_width);               // Foot Radius of the Complementary Cone
+    rfk = bg_complimentary_cone_tip_radius(modul, tooth_number, partial_cone_angle, tooth_width);        // Tip Radius of the Cylinders for
+                                                                    // Complementary Truncated Cone
+    height_fk = bg_complimentary_truncated_cone_height(modul, tooth_number, partial_cone_angle, tooth_width);                // height of the Complementary Truncated Cones
+
+    echo("Bevel Gear Height (1) = ", height_f-height_fk);
+    echo("Bevel Gear Height (2) = ", bevel_gear_cylinder_height(modul, tooth_number, partial_cone_angle, tooth_width));
 
     phi_r = sphere_ev(delta_b, partial_cone_angle);                      // Angle to Point of Involute on Partial Cone
 
@@ -867,15 +973,13 @@ function bgp_pinion_cone_angle(axis_angle, gear_teeth, pinion_teeth) =
 // Sphere radius
 function bgp_sphere_radius(modul, axis_angle, gear_teeth, pinion_teeth) =
     bgp_gear_radius(modul, gear_teeth) / sin(bgp_gear_cone_angle(axis_angle, gear_teeth, pinion_teeth));
-// Tip clearance
-function bgp_tip_clearance(modul) = modul / 6;
 // Bevel diameter on the sphere
 function bgp_bevel_diameter(modul, axis_angle, gear_teeth, pinion_teeth, is_pinion=false) =
     PI*bgp_sphere_radius(modul, axis_angle, gear_teeth, pinion_teeth)*
         (is_pinion ?
             bgp_pinion_cone_angle(axis_angle, gear_teeth, pinion_teeth) :
             bgp_gear_cone_angle(axis_angle, gear_teeth, pinion_teeth))
-        /90-2*(modul+bgp_tip_clearance(modul));
+        /90-2*(modul+tip_clearance(modul));
 // Root cone radius on the sphere
 function bgp_root_cone_radius(modul, axis_angle, gear_teeth, pinion_teeth, is_pinion=false) =
     bgp_bevel_diameter(modul, axis_angle, gear_teeth, pinion_teeth, is_pinion)/2;
