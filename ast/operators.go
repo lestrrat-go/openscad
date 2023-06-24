@@ -79,8 +79,6 @@ func (op *UnaryOp) EmitStmt(ctx *EmitContext, w io.Writer) error {
 		}
 		fmt.Fprintf(w, "%c", r)
 	}
-
-	return nil
 }
 
 type BinaryOp struct {

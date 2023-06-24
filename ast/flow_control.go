@@ -117,6 +117,7 @@ func (l *LetBlock) Add(stmt ...Stmt) *LetBlock {
 }
 
 func (l *LetBlock) EmitStmt(ctx *EmitContext, w io.Writer) error {
+	fmt.Fprintf(w, "\n%s", ctx.Indent())
 	if err := emitLetPreamble(ctx, w, l.variables); err != nil {
 		return err
 	}
