@@ -183,6 +183,10 @@ You can version control the libraries just as you do your Go code, and you can s
 somewhat easier than just have a file lying around and be at the mercy of your users
 knowing how to correctly download and keep track of them.
 
+Provided you follow the module publishing rules of Go, `mylibrary` and `myawesomemodel` can
+be in separate repositories, and be maintained by separate people -- they will just use 
+Go's dependency management system and automatically download/update the code.
+
 # FAQ
 
 ## Why did you have to create an entire _parser_ just for this? Couldn't you just, you know, run `sed` and replace the `include` calls?
