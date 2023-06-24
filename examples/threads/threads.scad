@@ -1,3 +1,11 @@
+// Local modifications can be tracked via the git log.
+// This file's license is independent from github.com/lestrrat-go/openscad.
+// Any modifications made to this file should be considered CC0,
+// the same as the original version. The intention is to 
+// make it easier for the upstream project to incorporate these
+// changes, should they decide to do so in the future
+// (and also to make it easier for us to incorporate their changes!)
+
 // Created 2016-2017 by Ryan A. Colyer.
 // This work is released with CC0 into the public domain.
 // https://creativecommons.org/publicdomain/zero/1.0/
