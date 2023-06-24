@@ -17,14 +17,34 @@ func Lookup(name string) (ast.Stmt, bool) {
 }
 
 func RegisterFile(filename string, options ...RegisterFileOption) error {
-	srcfs := os.DirFS(".")
 	lookupName := filename
 
+	var parseFileOptions []ParseFileOption
 	//nolint:forcetypeassert
 	for _, option := range options {
 		switch option.Ident() {
 		case optLookupNameKey{}:
 			lookupName = option.Value().(string)
+		default:
+			if pfo, ok := option.(ParseFileOption); ok {
+				parseFileOptions = append(parseFileOptions, pfo)
+			}
+		}
+	}
+
+	stmts, err := ParseFile(filename, parseFileOptions...)
+	if err != nil {
+		return err
+	}
+	return ast.Register(lookupName, stmts)
+}
+
+func ParseFile(filename string, options ...ParseFileOption) (ast.Stmt, error) {
+	srcfs := os.DirFS(".")
+
+	//nolint:forcetypeassert
+	for _, option := range options {
+		switch option.Ident() {
 		case optFSKey{}:
 			srcfs = option.Value().(fs.FS)
 		}
@@ -32,13 +52,12 @@ func RegisterFile(filename string, options ...RegisterFileOption) error {
 
 	code, err := fs.ReadFile(srcfs, filename)
 	if err != nil {
-		return fmt.Errorf("failed to read %q: %w", filename, err)
+		return nil, fmt.Errorf("failed to read %q: %w", filename, err)
 	}
 
 	stmts, err := Parse(code)
 	if err != nil {
-		return fmt.Errorf("failed to parse %q: %w", filename, err)
+		return nil, fmt.Errorf("failed to parse %q: %w", filename, err)
 	}
-
-	return ast.Register(lookupName, stmts)
+	return stmts, nil
 }
