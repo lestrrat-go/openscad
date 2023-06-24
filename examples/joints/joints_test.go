@@ -1,4 +1,4 @@
-package threads_test
+package joints_test
 
 import (
 	"io"
@@ -6,14 +6,12 @@ import (
 
 	"github.com/lestrrat-go/openscad"
 	"github.com/lestrrat-go/openscad/ast"
-	_ "github.com/lestrrat-go/openscad/examples/threads"
+	_ "github.com/lestrrat-go/openscad/examples/joints"
 	"github.com/stretchr/testify/require"
 )
 
-func TestThreads(t *testing.T) {
-	stmt, ok := openscad.Lookup("threads.scad")
-	if !ok {
-		t.Errorf("failed to lookup threads.scad")
-	}
+func TestDovetail(t *testing.T) {
+	stmt, ok := openscad.Lookup("dovetail.scad")
+	require.True(t, ok, "lookup dovetail.scad should succeed")
 	require.NoError(t, ast.Emit(stmt, io.Discard), `emit should succeed`)
 }

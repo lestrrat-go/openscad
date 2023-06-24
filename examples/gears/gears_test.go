@@ -1,4 +1,4 @@
-package threads_test
+package gears_test
 
 import (
 	"io"
@@ -6,14 +6,12 @@ import (
 
 	"github.com/lestrrat-go/openscad"
 	"github.com/lestrrat-go/openscad/ast"
-	_ "github.com/lestrrat-go/openscad/examples/threads"
+	_ "github.com/lestrrat-go/openscad/examples/gears"
 	"github.com/stretchr/testify/require"
 )
 
-func TestThreads(t *testing.T) {
-	stmt, ok := openscad.Lookup("threads.scad")
-	if !ok {
-		t.Errorf("failed to lookup threads.scad")
-	}
+func TestGears(t *testing.T) {
+	stmt, ok := openscad.Lookup("gears.scad")
+	require.True(t, ok, "lookup gears.scad should succeed")
 	require.NoError(t, ast.Emit(stmt, io.Discard), `emit should succeed`)
 }
