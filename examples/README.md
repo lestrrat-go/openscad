@@ -7,7 +7,7 @@ created ourselves. Some of them depend on each other.
 These files are meant to be examples of how to make the depdency management of OpenSCAD
 files slightly bit easier using Go's builtin dependency management.
 
-# Preparation
+# How to Use github.com/lestrrat-go/openscad to manage inter-dependent OpenSCAD Projects
 
 (NOTE TO SELF: This all works, but there are too many steps for the layman. Consider
 creating tools to semi-automate this)
