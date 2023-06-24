@@ -11,6 +11,8 @@ $fn = 50;
 // Tip clearance
 function tip_clearance(modul) = modul / 6;
 
+function transverse_section_helix_angle(pressure_angle, helix_angle) =
+    atan(tan(pressure_angle) / cos(helix_angle));
 
 /* Library for Involute Gears, Screws and Racks
 
@@ -231,6 +233,97 @@ module mountable_rack(modul, length, height, width, pressure_angle, helix_angle,
             }
         }
 
+// sg = spur gear
+function sg_pitch_circle_diameter(modul, tooth_number) =
+    modul * tooth_number;
+function sg_pitch_circle_radius(modul, tooth_number) =
+    let (d = sg_pitch_circle_diameter(modul, tooth_number))
+        d / 2;
+function sg_base_circle_diameter(modul, tooth_number, pressure_angle, helix_angle) =
+    let (
+        d = sg_pitch_circle_diameter(modul, tooth_number),
+        alpha_spur = transverse_section_helix_angle(pressure_angle, helix_angle)
+    )
+        d * cos(alpha_spur);
+function sg_base_circle_radius(modul, tooth_number, pressure_angle, helix_angle) =
+    let (db = sg_base_circle_diameter(modul, tooth_number, pressure_angle, helix_angle))
+        db / 2;
+
+function sg_tip_circle_diameter(modul, tooth_number) =
+    let (d = sg_pitch_circle_diameter(modul, tooth_number))
+        (modul <1)? d + modul * 2.2 : d + modul * 2;
+
+function sg_tip_circle_radius(modul, tooth_number) =
+    let (da = sg_tip_circle_diameter(modul, tooth_number))
+        da / 2;
+
+function sg_tip_clearance(modul, tooth_number) =
+    (tooth_number <3)? 0 : tip_clearance(modul);
+
+function sg_root_circle_diameter(modul, tooth_number) =
+    let (
+        d = sg_pitch_circle_diameter(modul, tooth_number),
+        c = sg_tip_clearance(modul, tooth_number)
+    )
+        d - 2 * (modul + c);
+
+function sg_root_circle_radius(modul, tooth_number) =
+    let (df = sg_root_circle_diameter(modul, tooth_number))
+        df / 2;
+
+function sg_max_rolling_angle(modul, tooth_number, pressure_angle, helix_angle) =
+    let(
+        rb = sg_base_circle_radius(modul, tooth_number, pressure_angle, helix_angle),
+        ra = sg_tip_circle_radius(modul, tooth_number)
+    )
+        acos(rb / ra);
+
+function sg_pitch_circle_rolling_angle(modul, tooth_number, pressure_angle, helix_angle) =
+    let (
+        rb = sg_base_circle_radius(modul, tooth_number, pressure_angle, helix_angle),
+        r  = sg_pitch_circle_radius(modul, tooth_number)
+    )
+        acos(rb / r);
+
+function sg_involute_pitch_circle_angle(modul, tooth_number, pressure_angle, helix_angle) =
+    let (rho_r = sg_pitch_circle_rolling_angle(modul, tooth_number, pressure_angle, helix_angle))
+        grad(tan(rho_r)-radian(rho_r));
+
+function sg_torsion_angle(modul, tooth_number, helix_angle, width) =
+    let (
+        r = sg_pitch_circle_radius(modul, tooth_number),
+    )
+        rad*width/(r*tan(90-helix_angle));
+
+
+function sg_involute_steps(modul, tooth_number, pressure_angle, helix_angle) =
+    let (rho_ra = sg_max_rolling_angle(modul, tooth_number, pressure_angle, helix_angle))
+        rho_ra/16;
+
+function sg_weight_reduction_hole_radius(modul, tooth_number, bore) =
+    let(rf = sg_root_circle_radius(modul, tooth_number) )
+        (2*rf - bore)/8;
+
+function sg_weight_reduction_hole_distance(modul, tooth_number, bore) =
+    let (r_hole = sg_weight_reduction_hole_radius(modul, tooth_number, bore))
+        bore/2+2*r_hole;
+
+function sg_weight_reduction_hole_count(modul, tooth_number, bore) =
+    let(
+        r_hole = sg_weight_reduction_hole_radius(modul, tooth_number, bore),
+        rm = sg_weight_reduction_hole_distance(modul, tooth_number, bore)
+    )
+        floor(2*PI*rm/(3*r_hole));
+
+function sg_should_optimize(want_optimization, modul, tooth_number, width, bore) =
+    let (
+        d = sg_pitch_circle_diameter(modul, tooth_number),
+        r = sg_pitch_circle_radius(modul, tooth_number)
+    )
+        want_optimization && r >= width*1.5 && d > 2*bore;
+
+function sg_pitch_angle(tooth_number) = 
+    360/tooth_number;
 /*  Spur gear
     modul = Height of the Tooth Tip beyond the Pitch Circle
     tooth_number = Number of Gear Teeth
@@ -240,32 +333,27 @@ module mountable_rack(modul, length, height, width, pressure_angle, helix_angle,
     helix_angle = Helix Angle to the Axis of Rotation; 0° = Spur Teeth
     optimized = Create holes for Material-/Weight-Saving or Surface Enhancements where Geometry allows */
 module spur_gear(modul, tooth_number, width, bore, pressure_angle = 20, helix_angle = 0, optimized = true) {
-
     // Dimension Calculations
-    d = modul * tooth_number;                                           // Pitch Circle Diameter
-    r = d / 2;                                                      // Pitch Circle Radius
-    alpha_spur = atan(tan(pressure_angle)/cos(helix_angle));// Helix Angle in Transverse Section
-    db = d * cos(alpha_spur);                                      // Base Circle Diameter
-    rb = db / 2;                                                    // Base Circle Radius
-    da = (modul <1)? d + modul * 2.2 : d + modul * 2;               // Tip Diameter according to DIN 58400 or DIN 867
-    ra = da / 2;                                                    // Tip Circle Radius
-    c =  (tooth_number <3)? 0 : modul/6;                                // Tip Clearance
-    df = d - 2 * (modul + c);                                       // Root Circle Diameter
-    rf = df / 2;                                                    // Root Radius
-    rho_ra = acos(rb/ra);                                           // Maximum Rolling Angle;
+    r = sg_pitch_circle_radius(modul, tooth_number);                                                      // Pitch Circle Radius
+    rb = sg_base_circle_radius(modul, tooth_number, pressure_angle, helix_angle);                                                    // Base Circle Radius
+    rf = sg_root_circle_radius(modul, tooth_number);                                                    // Root Radius
+    rho_ra = sg_max_rolling_angle(modul, tooth_number, pressure_angle, helix_angle);                                           // Maximum Rolling Angle;
                                                                     // Involute begins on the Base Circle and ends at the Tip Circle
-    rho_r = acos(rb/r);                                             // Rolling Angle at Pitch Circle;
+    rho_r = sg_pitch_circle_rolling_angle(modul, tooth_number, pressure_angle, helix_angle);                                             // Rolling Angle at Pitch Circle;
                                                                     // Involute begins on the Base Circle and ends at the Tip Circle
-    phi_r = grad(tan(rho_r)-radian(rho_r));                         // Angle to Point of Involute on Pitch Circle
-    gamma = rad*width/(r*tan(90-helix_angle));               // Torsion Angle for Extrusion
-    step = rho_ra/16;                                            // Involute is divided into 16 pieces
-    tau = 360/tooth_number;                                             // Pitch Angle
 
-    r_hole = (2*rf - bore)/8;                                    // Radius of Holes for Material-/Weight-Saving
-    rm = bore/2+2*r_hole;                                        // Distance of the Axes of the Holes from the Main Axis
-    z_hole = floor(2*PI*rm/(3*r_hole));                             // Number of Holes for Material-/Weight-Saving
+    phi_r = sg_involute_pitch_circle_angle(modul, tooth_number, pressure_angle, helix_angle);                         // Angle to Point of Involute on Pitch Circle
+    gamma = sg_torsion_angle(modul, tooth_number, helix_angle, width);               // Torsion Angle for Extrusion
+    step = sg_involute_steps(modul, tooth_number, pressure_angle, helix_angle)
+    ;                                            // Involute is divided into 16 pieces
+    tau = sg_pitch_angle(tooth_number);                                  // Pitch Angle
 
-    optimized = (optimized && r >= width*1.5 && d > 2*bore);    // is Optimization useful?
+    r_hole = sg_weight_reduction_hole_radius(modul, tooth_number, bore); // Radius of Holes for Material-/Weight-Saving
+
+    rm = sg_weight_reduction_hole_distance(modul, tooth_number, bore);   // Distance of the Axes of the Holes from the Main Axis
+    z_hole = sg_weight_reduction_hole_count(modul, tooth_number, bore); // Number of Holes for Material-/Weight-Saving
+
+    optimized = sg_should_optimize(optimized, modul, tooth_number, width, bore);
 
     // Drawing
     union(){
@@ -676,11 +764,8 @@ function bg_inside_tooth_cone_radius(modul, tooth_number, partial_cone_angle, to
     )
         rg_outside - tooth_width;
 
-function bg_transverse_section_helix_angle(pressure_angle, helix_angle) =
-    atan(tan(pressure_angle) / cos(helix_angle));
-
 function bg_base_cone_angle(pressure_angle, helix_angle, partial_cone_angle) =
-    asin(cos(bg_transverse_section_helix_angle(pressure_angle, helix_angle)) * sin(partial_cone_angle));
+    asin(cos(transverse_section_helix_angle(pressure_angle, helix_angle)) * sin(partial_cone_angle));
 
 function bg_outside_tooth_cone_foot_diameter(modul, tooth_number, partial_cone_angle) =
     let (
@@ -769,7 +854,6 @@ module bevel_gear(modul, tooth_number, partial_cone_angle, tooth_width, bore, pr
     r_outside = bg_part_cone_radius(modul, tooth_number);                                        // Part Cone Radius at the Cone Base
     rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle);                      // Large-Cone Radius for Outside-Tooth, corresponds to the Length of the Cone-Flank;
     rg_inside = bg_inside_tooth_cone_radius(modul, tooth_number, partial_cone_angle, tooth_width);                              // Large-Cone Radius for Inside-Tooth
-    alpha_spur = bg_transverse_section_helix_angle(pressure_angle, helix_angle);// Helix Angle in Transverse Section
     delta_b = bg_base_cone_angle(pressure_angle, helix_angle, partial_cone_angle);          // Base Cone Angle
 
     da_outside = (modul <1)? d_outside + (modul * 2.2) * cos(partial_cone_angle): d_outside + modul * 2 * cos(partial_cone_angle);
