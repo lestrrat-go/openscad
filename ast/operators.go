@@ -1,9 +1,11 @@
 package ast
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 )
 
 type Group struct {
@@ -55,11 +57,29 @@ func (op *UnaryOp) EmitExpr(ctx *EmitContext, w io.Writer) error {
 
 func (op *UnaryOp) EmitStmt(ctx *EmitContext, w io.Writer) error {
 	// A unary operator for *, #, % can be used as a statement.
-	fmt.Fprintf(w, `%s%s`, ctx.Indent(), op.op)
-	if err := emitStmt(ctx, w, op.expr); err != nil {
+	var buf bytes.Buffer
+	if err := emitStmt(ctx, &buf, op.expr); err != nil {
 		return err
 	}
-	// Let the child expression emit the semicolon
+
+	// copy all of the whitespace characters from buf
+	// to w, then emit the operator.
+	for {
+		r, _, err := buf.ReadRune()
+		if err != nil {
+			return fmt.Errorf(`unary operator %q: failed to read from buffer: %w`, op.op, err)
+		}
+		if !unicode.IsSpace(r) {
+			fmt.Fprintf(w, `%s`, op.op)
+			fmt.Fprintf(w, `%c`, r)
+			if _, err := buf.WriteTo(w); err != nil {
+				return fmt.Errorf(`unary operator %q: failed to copy buffer to writer: %w`, op.op, err)
+			}
+			return nil
+		}
+		fmt.Fprintf(w, "%c", r)
+	}
+
 	return nil
 }
 
