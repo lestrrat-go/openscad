@@ -10,18 +10,17 @@ import (
 )
 
 func Example() {
-	width := dsl.Variable("width").Value(30)
 	stmts := dsl.Stmts(
-		width,
+		dsl.Variable("width").Value(30),
 		dsl.Module("foobar").
-			Parameters(width).
+			Parameters(dsl.Variable("width")).
 			Actions(
 				dsl.Rotate(
 					dsl.List(0, 180, 0),
 					dsl.Translate(
 						dsl.List(10, 10, 10),
-						dsl.Cube(width, 40, 5).Fn(24),
-						dsl.Cube(5, 40, width),
+						dsl.Cube(dsl.Variable("width"), 40, 5).Fn(24),
+						dsl.Cube(5, 40, dsl.Variable("width")),
 						dsl.Cylinder(10, 5, 15).Fa(12),
 					),
 				),
@@ -33,9 +32,8 @@ func Example() {
 		fmt.Printf("failed to emit: %s\n", err)
 	}
 	//OUTPUT:
-	// width=30;
-	//
-	// module foobar(width=30)
+	// width = 30;
+	// module foobar(width)
 	// {
 	//   rotate([0, 180, 0])
 	//     translate([10, 10, 10])
@@ -45,6 +43,7 @@ func Example() {
 	//       cylinder(h=10, r1=5, r2=15, $fa=12);
 	//     }
 	// }
+	//
 	// foobar();
 }
 

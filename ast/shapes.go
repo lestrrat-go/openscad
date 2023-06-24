@@ -113,25 +113,23 @@ func (c *Cube) Fn(v int) *Cube {
 }
 
 func (c *Cube) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	ctx = ctx.WithAllowAssignment(false)
-	fmt.Fprintf(w, `%scube([`, ctx.Indent())
-	if err := emitValue(ctx, w, c.width); err != nil {
-		return fmt.Errorf(`failed to emit cube width: %w`, err)
+	params := []interface{}{
+		[]interface{}{
+			c.width, // strip value
+			c.depth,
+			c.height,
+		},
 	}
-	fmt.Fprintf(w, `, `)
-	if err := emitValue(ctx, w, c.depth); err != nil {
-		return fmt.Errorf(`failed to emit cube depth: %w`, err)
+	if c.center != nil {
+		params = append(params, NewVariable("center").Value(*c.center))
 	}
-	fmt.Fprintf(w, `, `)
-	if err := emitValue(ctx, w, c.height); err != nil {
-		return fmt.Errorf(`failed to emit cube height: %w`, err)
+	if c.fn != nil {
+		params = append(params, NewVariable("$fn").Value(*c.fn))
 	}
-	fmt.Fprintf(w, `]`)
 
-	emitCenter(w, c.center)
-	emitFn(w, c.fn)
-	fmt.Fprintf(w, `);`) // cubes are always terminated with a semicolon
-	return nil
+	call := NewCall(`cube`).
+		Parameters(params...)
+	return call.EmitStmt(ctx, w)
 }
 
 type Cylinder struct {

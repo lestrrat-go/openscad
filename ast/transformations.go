@@ -28,18 +28,23 @@ func (t *Translate) Add(s Stmt) *Translate {
 	return t
 }
 
-func (t *Translate) EmitExpr(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprint(w, `translate(`)
-	if err := emitExpr(ctx.WithAllowAssignment(false), w, t.v); err != nil {
-		return fmt.Errorf(`failed to emit translate vector: %v`, err)
+func (t *Translate) makeCall() *Call {
+	call := NewCall(`translate`).
+		Parameters(t.v)
+	if children := t.children; len(children) > 0 {
+		call.Add(children...)
 	}
-	fmt.Fprint(w, `)`)
-	return emitChildren(ctx, w, t.children, true)
+	return call
+}
+
+func (t *Translate) EmitExpr(ctx *EmitContext, w io.Writer) error {
+	call := t.makeCall()
+	return call.EmitExpr(ctx, w)
 }
 
 func (t *Translate) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	fmt.Fprint(w, ctx.Indent())
-	return t.EmitExpr(ctx, w)
+	call := t.makeCall()
+	return call.EmitStmt(ctx, w)
 }
 
 type Rotate struct {
@@ -66,14 +71,12 @@ func (r *Rotate) Add(s Stmt) *Rotate {
 }
 
 func (r *Rotate) EmitStmt(ctx *EmitContext, w io.Writer) error {
-	indent := ctx.Indent()
-	fmt.Fprintf(w, `%srotate(`, indent)
-	if err := emitExpr(ctx, w, r.v); err != nil {
-		return fmt.Errorf(`failed to emit rotate vector: %w`, err)
+	call := NewCall(`rotate`).
+		Parameters(r.v)
+	if children := r.children; len(children) > 0 {
+		call.Add(children...)
 	}
-	fmt.Fprint(w, `)`)
-
-	return emitChildren(ctx, w, r.children, false)
+	return call.EmitStmt(ctx, w)
 }
 
 type LinearExtrude struct {
