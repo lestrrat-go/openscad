@@ -918,19 +918,20 @@ func (p *parser) handleForRange() (*ast.ForRange, error) {
 		return nil, fmt.Errorf(`expected colon, got %q`, tok.Value)
 	}
 
-	endExpr, err := p.handleExpr()
+	stepExpr, err := p.handleExpr()
 	if err != nil {
 		return nil, fmt.Errorf(`failed to parse second element for range expression: %w`, err)
 	}
 
-	var stepExpr interface{}
+	var endExpr interface{}
 	tok = p.Peek()
 	if tok.Type != Colon {
 		p.Unread()
+		endExpr = stepExpr
+		stepExpr = nil
 	} else {
 		// we have a three element range expression
-		endExpr = stepExpr
-		stepExpr, err = p.handleExpr()
+		endExpr, err = p.handleExpr()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse 'end' element for range expression: %w`, err)
 		}

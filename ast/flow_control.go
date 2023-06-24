@@ -131,6 +131,9 @@ type ForRange struct {
 }
 
 func NewForRange(start, end interface{}) *ForRange {
+	if start == nil || end == nil {
+		panic(`start and end must not be nil`)
+	}
 	return &ForRange{
 		start: start,
 		end:   end,
