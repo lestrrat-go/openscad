@@ -1,3 +1,11 @@
+// Local modifications can be tracked via the git log.
+// This file's license is independent from github.com/lestrrat-go/openscad.
+// Any modifications made to this file should be considered CC-BY-NC-SA,
+// the same as the original version. The intention is to 
+// make it easier for the upstream project to incorporate these
+// changes, should they decide to do so in the future
+// (and also to make it easier for us to incorporate their changes!)
+
 $fn = 50;
 
 /* Library for Involute Gears, Screws and Racks
@@ -839,6 +847,27 @@ module spiral_bevel_gear(modul, tooth_number, partial_cone_angle, tooth_width, b
     }
 }
 
+
+// These are tools for the construction of bevel gear pairs.
+// The module `bevel_gear_pair` uses these to calculate the correct pair of gears.
+//
+// They are available here so that users who need to customize the gears can utilize
+// the information
+
+// bgp = bevel gear pair
+
+// Cone radius of the gear
+function bgp_gear_radius(modul, gear_teeth) = modul * gear_teeth / 2;
+// Cone angle of the gear
+function bgp_gear_cone_angle(axis_angle, gear_teeth, pinion_teeth) =
+    atan(sin(axis_angle)/(pinion_teeth/gear_teeth+cos(axis_angle)));
+// Cone angle of the pinion
+function bgp_pinion_cone_angle(axis_angle, gear_teeth, pinion_teeth) =
+    atan(sin(axis_angle)/(gear_teeth/pinion_teeth+cos(axis_angle)));
+
+// Tip clearance
+function bgp_tip_clearance(modul) = modul / 6;
+
 /*  Bevel Gear Pair with any axis_angle; uses the Module "bevel_gear"
     modul = Height of the Tooth Tip over the Partial Cone; Specification for the Outside of the Cone
     gear_teeth = Number of Gear Teeth on the Gear
@@ -853,11 +882,11 @@ module spiral_bevel_gear(modul, tooth_number, partial_cone_angle, tooth_width, b
 module bevel_gear_pair(modul, gear_teeth, pinion_teeth, axis_angle=90, tooth_width, gear_bore, pinion_bore, pressure_angle=20, helix_angle=0, together_built=true){
 
     // Dimension Calculations
-    r_gear = modul*gear_teeth/2;                           // Cone Radius of the Gear
-    delta_gear = atan(sin(axis_angle)/(pinion_teeth/gear_teeth+cos(axis_angle)));   // Cone Angle of the Gear
-    delta_pinion = atan(sin(axis_angle)/(gear_teeth/pinion_teeth+cos(axis_angle)));// Cone Angle of the Pinion
+    r_gear = bgp_gear_radius(modul, gear_teeth);                           // Cone Radius of the Gear
+    delta_gear = bgp_gear_cone_angle(axis_angle, gear_teeth, pinion_teeth);   // Cone Angle of the Gear
+    delta_pinion = bgp_pinion_cone_angle(axis_angle, gear_teeth, pinion_teeth);// Cone Angle of the Pinion
     rg = r_gear/sin(delta_gear);                              // Radius of the Large Sphere
-    c = modul / 6;                                          // Tip Clearance
+    c = bgp_tip_clearance(modul);                                          // Tip Clearance
     df_pinion = pi*rg*delta_pinion/90 - 2 * (modul + c);    // Bevel Diameter on the Large Sphere
     rf_pinion = df_pinion / 2;                              // Root Cone Radius on the Large Sphere
     delta_f_pinion = rf_pinion/(pi*rg) * 180;               // Tip Cone Angle
