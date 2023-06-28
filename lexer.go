@@ -39,6 +39,7 @@ const (
 	question     = '?'
 	percent      = '%'
 	ampersand    = '&'
+	exclamation  = '!'
 )
 const (
 	EOF = iota
@@ -71,6 +72,7 @@ const (
 	Sharp
 	And
 	BitwiseAnd
+	Exclamation
 )
 
 type Token struct {
@@ -180,6 +182,8 @@ func Lex(ch chan *Token, src []byte) {
 			l.emitBuffer(Plus)
 		case minus:
 			l.emitBuffer(Minus)
+		case exclamation:
+			l.emitBuffer(Exclamation)
 		case slash:
 			next := l.peek()
 			switch next {

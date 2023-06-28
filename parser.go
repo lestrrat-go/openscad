@@ -454,11 +454,11 @@ func (p *parser) handleExpr() (ret interface{}, reterr error) {
 			return nil, fmt.Errorf(`failed to parse parenthesized expression: %w`, err)
 		}
 		expr = pe
-	case Minus:
+	case Minus, Exclamation:
 		p.Unread()
-		um, err := p.handleUnaryMinus()
+		um, err := p.handleUnary(tok)
 		if err != nil {
-			return nil, fmt.Errorf(`failed to parse unary minus: %w`, err)
+			return nil, fmt.Errorf(`failed to parse unary operator: %w`, err)
 		}
 		expr = um
 	case Literal:
@@ -1068,22 +1068,28 @@ func (p *parser) handleUse() (*ast.Use, error) {
 
 	return ast.NewUse(tok.Value), nil
 }
-func (p *parser) handleUnaryMinus() (interface{}, error) {
+
+func (p *parser) handleUnary(unary *Token) (interface{}, error) {
 	tok := p.Next()
-	if tok.Type != Minus {
-		return nil, fmt.Errorf(`expected '-', got %q`, tok.Value)
+	if tok.Type != unary.Type {
+		return nil, fmt.Errorf(`expected '%s', got %q`, unary.Value, tok.Value)
 	}
 
 	// -1, -var, -func(), -list[x]
 	tok = p.Peek()
 	switch tok.Type {
 	case Numeric:
+		// Only allowed for unary minus
+		if unary.Type != Minus {
+			return nil, fmt.Errorf(`unexpected numeric literal %q`, tok.Value)
+		}
+
 		p.Advance()
 		f, err := strconv.ParseFloat(tok.Value, 64)
 		if err != nil {
 			return nil, fmt.Errorf(`failed to parse numeric literal %q: %w`, tok.Value, err)
 		}
-		return ast.NewUnaryOp("-", f), nil
+		return ast.NewUnaryOp(unary.Value, f), nil
 	case OpenParen:
 		// -(expr)
 		p.Advance()
@@ -1095,7 +1101,7 @@ func (p *parser) handleUnaryMinus() (interface{}, error) {
 		if tok.Type != CloseParen {
 			return nil, fmt.Errorf(`expected ')', got %q`, tok.Value)
 		}
-		return ast.NewUnaryOp("-", ast.NewGroup(expr)), nil
+		return ast.NewUnaryOp(unary.Value, ast.NewGroup(expr)), nil
 	case Ident:
 		tok = p.Peek()
 		switch tok.Type {
@@ -1106,7 +1112,7 @@ func (p *parser) handleUnaryMinus() (interface{}, error) {
 			if err != nil {
 				return nil, fmt.Errorf(`failed to parse function call after unary minus: %w`, err)
 			}
-			return ast.NewUnaryOp("-", fn), nil
+			return ast.NewUnaryOp(unary.Value, fn), nil
 		case OpenBracket:
 			p.Unread() // [
 			p.Unread() // ident
@@ -1116,7 +1122,7 @@ func (p *parser) handleUnaryMinus() (interface{}, error) {
 			if err != nil {
 				return nil, fmt.Errorf(`failed to parse index after unary minus: %w`, err)
 			}
-			return ast.NewUnaryOp("-", index), nil
+			return ast.NewUnaryOp(unary.Value, index), nil
 		default:
 			p.Unread()
 			p.Unread()
