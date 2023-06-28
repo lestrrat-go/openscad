@@ -1131,31 +1131,31 @@ func (p *parser) handleUnary(unary *Token) (interface{}, error) {
 				return nil, fmt.Errorf(`failed to parse expression after unary minus: %w`, err)
 			}
 
-			return p.bindUnaryToFirstTerm(expr)
+			return p.bindUnaryToFirstTerm(unary, expr)
 		}
 	default:
 		return nil, fmt.Errorf(`unexpected token %q after unary minus`, tok.Value)
 	}
 }
 
-func (p *parser) bindUnaryToFirstTerm(expr interface{}) (interface{}, error) {
+func (p *parser) bindUnaryToFirstTerm(unary *Token, expr interface{}) (interface{}, error) {
 	// if the expression is either a binary or ternary operator
 	// take the first argument and bind to it
 	switch expr := expr.(type) {
 	case *ast.BinaryOp:
-		left, err := p.bindUnaryToFirstTerm(expr.Left())
+		left, err := p.bindUnaryToFirstTerm(unary, expr.Left())
 		if err != nil {
 			return nil, err
 		}
 		return ast.NewBinaryOp(expr.Op(), left, expr.Right()), nil
 	case *ast.TernaryOp:
-		cond, err := p.bindUnaryToFirstTerm(expr.Condition())
+		cond, err := p.bindUnaryToFirstTerm(unary, expr.Condition())
 		if err != nil {
 			return nil, err
 		}
 		return ast.NewTernaryOp(cond, expr.TrueExpr(), expr.FalseExpr()), nil
 	default:
-		return ast.NewUnaryOp("-", expr), nil
+		return ast.NewUnaryOp(unary.Value, expr), nil
 	}
 }
 
