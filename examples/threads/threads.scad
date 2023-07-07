@@ -15,7 +15,7 @@
 // v2.1
 
 
-screw_resolution = 0.2;  // in mm
+default_screw_resolution = 0.2;  // in mm
 
 
 // Provides standard metric thread pitches.
@@ -231,7 +231,7 @@ module ClosePoints(pointarrays) {
   ];
   faces = concat(faces_bot, faces_loop, faces_top);
 
-  polyhedron(points=points, faces=faces);
+  polyhedron(points=points, faces=faces, convexity=2);
 }
 
 
@@ -239,6 +239,7 @@ module ClosePoints(pointarrays) {
 // This creates a vertical rod at the origin with external threads.  It uses
 // metric standards by default.
 module ScrewThread(outer_diam, height, pitch=0, tooth_angle=30, tolerance=0.4, tip_height=0, tooth_height=0, tip_min_fract=0) {
+  screw_resolution = is_undef($screw_resolution) ? default_screw_resolution : $screw_resolution;
 
   pitch = (pitch==0) ? ThreadPitch(outer_diam) : pitch;
   tooth_height = (tooth_height==0) ? pitch : tooth_height;
@@ -352,8 +353,9 @@ module AugerThread(outer_diam, inner_diam, height, pitch, tooth_angle=30, tolera
 
 // This creates a threaded hole in its children using metric standards by
 // default.
-module ScrewHole(outer_diam, height, position=[0,0,0], rotation=[0,0,0], pitch=0, tooth_angle=30, tolerance=0.4, tooth_height=0) {
+module ScrewHole(outer_diam, height, position=[0,0,0], rotation=[0,0,0], pitch=0, tooth_angle=30, tolerance=0.4, tooth_height=0, tip_height=0, tip_min_fract=0) {
   extra_height = 0.001 * height;
+  pitch = (pitch==0) ? ThreadPitch(outer_diam) : pitch;
 
   difference() {
     children();
@@ -361,7 +363,7 @@ module ScrewHole(outer_diam, height, position=[0,0,0], rotation=[0,0,0], pitch=0
       rotate(rotation)
       translate([0, 0, -extra_height/2])
       ScrewThread(1.01*outer_diam + 1.25*tolerance, height + extra_height,
-        pitch, tooth_angle, tolerance, tooth_height=tooth_height);
+        pitch, tooth_angle, tolerance, tooth_height=tooth_height, tip_height=tip_height, tip_min_fract=tip_min_fract);
   }
 }
 
