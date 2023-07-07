@@ -602,3 +602,12 @@ module MetricBoltSet(diameter, length, quantity=1) {
     translate([8*diameter, i*4*diameter, 0]) MetricWasher(diameter);
   }
 }
+
+// washer creates cylindrical model with a hole in the middle,
+// so it can be used as a washer or a spacer.
+module washer(outer_radius, inner_radius, height, clearance=0.2, inner_fn=400, outer_fn=400) {
+  render() difference() {
+    cylinder(r=outer_radius, h=height, $fn=outer_fn);
+    cylinder(r=inner_radius+clearance, h=height, $fn=inner_fn);
+  }
+}
