@@ -234,11 +234,16 @@ module mountable_rack(modul, length, height, width, pressure_angle, helix_angle,
         }
 
 // sg = spur gear
+
 function sg_pitch_circle_diameter(modul, tooth_number) =
-    modul * tooth_number;
+    modul * tooth_number; // d
+
 function sg_pitch_circle_radius(modul, tooth_number) =
     let (d = sg_pitch_circle_diameter(modul, tooth_number))
         d / 2;
+
+function sg_tooth_height(modul) = 2.25 *modul;
+
 function sg_base_circle_diameter(modul, tooth_number, pressure_angle, helix_angle) =
     let (
         d = sg_pitch_circle_diameter(modul, tooth_number),
@@ -249,9 +254,10 @@ function sg_base_circle_radius(modul, tooth_number, pressure_angle, helix_angle)
     let (db = sg_base_circle_diameter(modul, tooth_number, pressure_angle, helix_angle))
         db / 2;
 
+// TODO: somehow this naming doesn't seem to quite fit
 function sg_tip_circle_diameter(modul, tooth_number) =
     let (d = sg_pitch_circle_diameter(modul, tooth_number))
-        (modul <1)? d + modul * 2.2 : d + modul * 2;
+        d + modul * ( (modul < 1) ? 2.2 : 2);
 
 function sg_tip_circle_radius(modul, tooth_number) =
     let (da = sg_tip_circle_diameter(modul, tooth_number))
