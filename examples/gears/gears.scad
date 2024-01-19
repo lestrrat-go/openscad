@@ -5,6 +5,14 @@
 // make it easier for the upstream project to incorporate these
 // changes, should they decide to do so in the future
 // (and also to make it easier for us to incorporate their changes!)
+modul=1;
+tooth_number=32;
+bore=5;
+gear_base=2.5;
+helix_angle=20;
+optimized=true;
+width=5;
+clearance=0.3;
 
 $fn = 50;
 
@@ -56,7 +64,7 @@ Permitted modules according to DIN 780:
 // General Variables
 // PI = 3.14159;  // Uncomment if for some reason your OpenSCAD version doesn't have PI defined
 rad = 57.29578;
-clearance = 0.05;   // clearance between teeth
+teeth_clearance = 0.05;   // clearance between teeth
 
 /*  Converts Radians to Degrees */
 function grad(pressure_angle) = pressure_angle*rad;
@@ -129,7 +137,7 @@ module copier(vect, number, distance, winkel){
 module rack(modul, length, height, width, pressure_angle = 20, helix_angle = 0) {
 
     // Dimension Calculations
-    modul=modul*(1-clearance);
+    modul=modul*(1-teeth_clearance);
     c = modul / 6;                                              // Tip Clearance
     mx = modul/cos(helix_angle);                          // Module Shift by Helix Angle in the X-Direction
     a = 2*mx*tan(pressure_angle)+c*tan(pressure_angle);       // Flank Width
@@ -297,7 +305,7 @@ function sg_involute_pitch_circle_angle(modul, tooth_number, pressure_angle, hel
 
 function sg_torsion_angle(modul, tooth_number, helix_angle, width) =
     let (
-        r = sg_pitch_circle_radius(modul, tooth_number),
+        r = sg_pitch_circle_radius(modul, tooth_number)
     )
         rad*width/(r*tan(90-helix_angle));
 
@@ -363,13 +371,13 @@ module spur_gear(modul, tooth_number, width, bore, pressure_angle = 20, helix_an
 
     // Drawing
     union(){
-        rotate([0,0,-phi_r-90*(1-clearance)/tooth_number]){                     // Center Tooth on X-Axis;
+        rotate([0,0,-phi_r-90*(1-teeth_clearance)/tooth_number]){                     // Center Tooth on X-Axis;
                                                                         // Makes Alignment with other Gears easier
 
             linear_extrude(height = width, convexity = 10, twist = gamma){
                 difference(){
                     union(){
-                        tooth_width = (180*(1-clearance))/tooth_number+2*phi_r;
+                        tooth_width = (180*(1-teeth_clearance))/tooth_number+2*phi_r;
                         circle(rf);                                     // Root Circle
                         for (rot = [0:tau:360]){
                             rotate (rot){                               // Copy and Rotate "Number of Teeth"
@@ -634,13 +642,13 @@ module ring_gear(modul, tooth_number, width, rim_width, pressure_angle = 20, hel
     tau = 360/tooth_number;                                             // Pitch Angle
 
     // Drawing
-    rotate([0,0,-phi_r-90*(1+clearance)/tooth_number])                      // Center Tooth on X-Axis;
+    rotate([0,0,-phi_r-90*(1+teeth_clearance)/tooth_number])                      // Center Tooth on X-Axis;
                                                                     // Makes Alignment with other Gears easier
     linear_extrude(height = width, twist = gamma){
         difference(){
             circle(r = ra + rim_width);                            // Outer Circle
             union(){
-                tooth_width = (180*(1+clearance))/tooth_number+2*phi_r;
+                tooth_width = (180*(1+teeth_clearance))/tooth_number+2*phi_r;
                 circle(rf);                                         // Root Circle
                 for (rot = [0:tau:360]){
                     rotate (rot) {                                  // Copy and Rotate "Number of Teeth"
@@ -796,20 +804,20 @@ function bg_foot_delta(modul, tooth_number, partial_cone_angle) =
 function bg_root_cone_radius(modul, tooth_number, partial_cone_angle) =
     let (
         rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle),
-        delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle),
+        delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle)
     )
         rg_outside * sin(delta_f);
 
 function bg_root_cone_height(modul, tooth_number, partial_cone_angle) =
     let (
         rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle),
-        delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle),
+        delta_f = bg_foot_delta(modul, tooth_number, partial_cone_angle)
     )
         rg_outside * cos(delta_f);
 
 function bg_complimentary_cone_height(modul, tooth_number, partial_cone_angle, tooth_width) =
     let (
-        rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle),
+        rg_outside = bg_outside_tooth_cone_radius(modul, tooth_number, partial_cone_angle)
     )
         (rg_outside - tooth_width) / cos(partial_cone_angle);
 
@@ -896,10 +904,10 @@ module bevel_gear(modul, tooth_number, partial_cone_angle, tooth_width, bore, pr
     step = (delta_a - delta_b)/16;
     tau = 360/tooth_number;                                             // Pitch Angle
     start = (delta_b > delta_f) ? delta_b : delta_f;
-    mirrpoint = (180*(1-clearance))/tooth_number+2*phi_r;
+    mirrpoint = (180*(1-teeth_clearance))/tooth_number+2*phi_r;
 
     // Drawing
-    rotate([0,0,phi_r+90*(1-clearance)/tooth_number]){                      // Center Tooth on X-Axis;
+    rotate([0,0,phi_r+90*(1-teeth_clearance)/tooth_number]){                      // Center Tooth on X-Axis;
                                                                     // Makes Alignment with other Gears easier
         translate([0,0,height_f]) rotate(a=[0,180,0]){
             union(){
@@ -1117,7 +1125,7 @@ module bevel_gear_pair(modul, gear_teeth, pinion_teeth, axis_angle=90, tooth_wid
 
     // Drawing
     // Rad
-    rotate([0,0,180*(1-clearance)/gear_teeth*do_rotate])
+    rotate([0,0,180*(1-teeth_clearance)/gear_teeth*do_rotate])
         bevel_gear(modul, gear_teeth, delta_gear, tooth_width, gear_bore, pressure_angle, helix_angle);
 
     // Ritzel
@@ -1169,7 +1177,7 @@ module bevel_herringbone_gear_pair(modul, gear_teeth, pinion_teeth, axis_angle=9
     rotate = is_even(pinion_teeth);
 
     // Gear
-    rotate([0,0,180*(1-clearance)/gear_teeth*rotate])
+    rotate([0,0,180*(1-teeth_clearance)/gear_teeth*rotate])
         bevel_herringbone_gear(modul, gear_teeth, delta_gear, tooth_width, gear_bore, pressure_angle, helix_angle);
 
     // Pinion
@@ -1332,3 +1340,18 @@ module worm_gear(modul, tooth_number, thread_starts, width, length, worm_bore, g
 //worm(modul=1, thread_starts=2, length=15, bore=4, pressure_angle=20, lead_angle=10, together_built=true);
 
 //worm_gear(modul=1, tooth_number=30, thread_starts=2, width=8, length=20, worm_bore=4, gear_bore=4, pressure_angle=20, lead_angle=10, optimized=1, together_built=1, show_spur=1, show_worm=1);
+
+if (gear_base > 0) {
+    rotate_extrude(angle=360)
+        polygon(points=([[(bore+clearance)/2, 0], [bore+clearance, 0], [bore+clearance, gear_base+width], [(bore+clearance)/2, gear_base+width]]));
+    *difference() {
+        cylinder(r=bore+clearance, h=gear_base);
+        cylinder(r=(bore+clearance)/2, h=gear_base);
+    }
+}
+
+*rotate_extrude(angle=90)
+    polygon(points=[[0, 0], [(bore+clearance)/2, 0], [(bore+clearance)/2, gear_base+width], [0, gear_base+width]]);
+translate([0, 0, gear_base])
+    spur_gear (modul=modul, tooth_number=tooth_number, width=width, bore=bore+clearance, pressure_angle=20, helix_angle=helix_angle, optimized=optimized);
+// spur_gear (modul=1, tooth_number=32, width=5, bore=5, pressure_angle=20, helix_angle=20, optimized=true);
